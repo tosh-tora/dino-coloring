@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768" width="1024" height="768">
+  <g fill="none" stroke="#1a1a1a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <!-- あかちゃんきょうりゅうの あたま -->
+    <path d="M370 430 C355 300 420 200 510 200 C600 200 665 300 650 430"/>
+    <!-- あたまの ちいさなトゲ ×3 -->
+    <path d="M440 225 L430 180 L470 205"/>
+    <path d="M495 205 L505 158 L535 200"/>
+    <path d="M560 212 L585 175 L595 220"/>
+    <!-- 目 ×2 -->
+    <circle cx="455" cy="330" r="30"/>
+    <circle cx="455" cy="337" r="10" fill="#1a1a1a" stroke="none"/>
+    <circle cx="565" cy="330" r="30"/>
+    <circle cx="565" cy="337" r="10" fill="#1a1a1a" stroke="none"/>
+    <!-- くち -->
+    <path d="M475 395 Q510 425 545 395"/>
+    <!-- ほっぺ ×2 -->
+    <circle cx="405" cy="380" r="14"/>
+    <circle cx="615" cy="380" r="14"/>
+    <!-- たまごのから（ぎざぎざのふち） -->
+    <path d="M340 440 L390 410 L430 450 L480 408 L530 452 L580 410 L625 448 L672 418 C690 560 610 660 505 660 C400 660 330 570 340 440 Z"/>
+    <!-- からのもよう -->
+    <circle cx="430" cy="560" r="16"/>
+    <circle cx="530" cy="590" r="14"/>
+    <circle cx="600" cy="530" r="13"/>
+    <!-- 地面 -->
+    <path d="M150 700 C350 690 700 690 880 700"/>
+  </g>
+</svg>

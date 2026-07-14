@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768" width="1024" height="768">
+  <g fill="none" stroke="#1a1a1a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <!-- はなびら ×6 -->
+    <circle cx="460" cy="160" r="80"/>
+    <circle cx="581" cy="230" r="80"/>
+    <circle cx="581" cy="370" r="80"/>
+    <circle cx="460" cy="440" r="80"/>
+    <circle cx="339" cy="370" r="80"/>
+    <circle cx="339" cy="230" r="80"/>
+    <!-- まんなか（おかお） -->
+    <circle cx="460" cy="300" r="78"/>
+    <circle cx="435" cy="285" r="8" fill="#1a1a1a" stroke="none"/>
+    <circle cx="485" cy="285" r="8" fill="#1a1a1a" stroke="none"/>
+    <path d="M430 320 Q460 345 490 320"/>
+    <!-- くき -->
+    <path d="M460 520 C455 590 465 640 460 700"/>
+    <!-- はっぱ ×2 -->
+    <path d="M458 600 C410 570 360 575 330 615 C370 645 425 638 458 615 Z"/>
+    <path d="M462 655 C510 625 560 630 590 670 C550 700 495 693 462 670 Z"/>
+    <!-- おひさま -->
+    <circle cx="860" cy="130" r="55"/>
+    <path d="M860 40 v-25 M860 220 v25 M770 130 h-25 M950 130 h25 M797 67 l-18 -18 M923 67 l18 -18 M797 193 l-18 18 M923 193 l18 18"/>
+    <!-- 地面 -->
+    <path d="M120 710 C320 700 700 700 920 710"/>
+  </g>
+</svg>
