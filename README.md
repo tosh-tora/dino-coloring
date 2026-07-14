@@ -2,6 +2,17 @@
 
 4歳児向けの恐竜ぬりえ Web アプリ（PWA）。iPad の Safari で開いて「ホーム画面に追加」すると、フルスクリーンのアプリとして使える。
 
+**公開URL: https://tosh-tora.github.io/dino-coloring/**
+
+## iPad で使う（PC 不要）
+
+1. iPad の **Safari** で https://tosh-tora.github.io/dino-coloring/ を開く（初回はネット接続が必要）
+2. 画面が表示されたら一度 **リロード**（アプリ本体がオフライン用にキャッシュされる）
+3. 共有ボタン → **「ホーム画面に追加」**。以後はホームのアイコンから全画面で起動でき、**機内モード／PC を切っていても動く**
+4. 誤操作でアプリの外に出ないようにしたい場合は iPad の **アクセスガイド**（設定 → アクセシビリティ）を併用すると安心
+
+> 仕組み: Service Worker が初回ロード時にアプリ一式をキャッシュするため、2回目以降はオフラインで起動する。iOS がストレージ逼迫でキャッシュを削除した場合のみ、再度ネットに繋いで開き直せば復活する。
+
 ## 使い方（開発）
 
 ```bash
@@ -55,4 +66,10 @@ assets/lineart/*.svg     線画（viewBox 1024x768、透明背景、太い黒線
 
 ## デプロイ
 
-`npm run build` の `dist/` を任意の静的ホスティング（GitHub Pages 等）に置くだけ。`vite.config.ts` の `base: "./"` によりサブパス配下でも動く。
+`master` に push すると GitHub Actions（`.github/workflows/deploy.yml`）が `npm run build` して GitHub Pages に自動公開する。`vite.config.ts` の `base: "./"` によりサブパス（`/dino-coloring/`）配下でも動く。
+
+初回セットアップ済みの内容:
+- リポジトリ: https://github.com/tosh-tora/dino-coloring
+- Pages ソース: GitHub Actions（`gh api --method POST repos/OWNER/REPO/pages -f build_type=workflow` で設定済み）
+
+アプリを更新したら、SW のキャッシュ名（`public/sw.js` の `CACHE_NAME`）を上げると端末側の更新反映が確実になる。
