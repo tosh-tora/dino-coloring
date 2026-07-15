@@ -23,6 +23,7 @@ export class PaintEngine {
   private activePointer: number | null = null;
   private points: { x: number; y: number }[] = [];
 
+  onStrokeStart: (() => void) | null = null;
   onStrokeEnd: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -82,6 +83,7 @@ export class PaintEngine {
 
     this.points = [this.toCanvasPos(e)];
     this.renderStroke();
+    this.onStrokeStart?.();
   };
 
   private onMove = (e: PointerEvent) => {

@@ -1,38 +1,11 @@
 // 完成演出: 紙吹雪 + WebAudio 合成のファンファーレ（音声ファイル不要）
+// 音声プリミティブ（getAudio / tone / blip）は audio.ts に集約している。
 
-let audioCtx: AudioContext | null = null;
-
-function getAudio(): AudioContext | null {
-  try {
-    if (!audioCtx) audioCtx = new AudioContext();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    return audioCtx;
-  } catch {
-    return null;
-  }
-}
-
-function tone(ctx: AudioContext, freq: number, start: number, dur: number, gainMax = 0.18) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "triangle";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0, ctx.currentTime + start);
-  gain.gain.linearRampToValueAtTime(gainMax, ctx.currentTime + start + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(ctx.currentTime + start);
-  osc.stop(ctx.currentTime + start + dur + 0.05);
-}
-
-/** ボタンタップの軽いポン音 */
-export function blip(freq = 660) {
-  const ctx = getAudio();
-  if (!ctx) return;
-  tone(ctx, freq, 0, 0.12, 0.1);
-}
+import { getAudio, tone, isMuted } from "./audio";
+export { blip } from "./audio";
 
 export function fanfare() {
+  if (isMuted()) return;
   const ctx = getAudio();
   if (!ctx) return;
   // C-E-G-C のアルペジオ + 和音
