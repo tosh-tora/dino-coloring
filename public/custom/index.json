@@ -2,13 +2,13 @@
   "items": [
     {
       "id": "shared-spinosaurus",
-      "name": "スピノサウルス（AI）",
+      "name": "スピノサウルス",
       "category": "cat-dino",
       "file": "shared-spinosaurus.png"
     },
     {
       "id": "shared-trex-vs-triceratops",
-      "name": "トリケラトプスとティラノサウルスのたたかい（AI）",
+      "name": "トリケラトプスとティラノサウルスのたたかい",
       "category": "cat-dino",
       "file": "shared-trex-vs-triceratops.png"
     }
