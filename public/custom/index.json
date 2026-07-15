@@ -5,6 +5,12 @@
       "name": "スピノサウルス（AI）",
       "category": "cat-dino",
       "file": "shared-spinosaurus.png"
+    },
+    {
+      "id": "shared-trex-vs-triceratops",
+      "name": "トリケラトプスとティラノサウルスのたたかい（AI）",
+      "category": "cat-dino",
+      "file": "shared-trex-vs-triceratops.png"
     }
   ]
 }
