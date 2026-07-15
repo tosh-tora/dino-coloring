@@ -17,6 +17,7 @@ import fishSvg from "../assets/lineart/fish.svg?raw";
 import flowerSvg from "../assets/lineart/flower.svg?raw";
 import rocketSvg from "../assets/lineart/rocket.svg?raw";
 import butterflySvg from "../assets/lineart/butterfly.svg?raw";
+import { BUILTIN_CATEGORY } from "./categories";
 
 export const CANVAS_W = 1024;
 export const CANVAS_H = 768;
@@ -24,10 +25,16 @@ export const CANVAS_H = 768;
 export interface LineArt {
   id: string;
   name: string;
-  svg: string;
+  /** 組み込み線画は SVG 文字列で定義する */
+  svg?: string;
+  /** アップロード／共有下絵は透明化済みラスター画像の data URL を持つ */
+  imageUrl?: string;
+  /** 既定カテゴリー id（artmeta の上書きが無いときに使う）。未分類は undefined */
+  category?: string;
 }
 
-export const catalog: LineArt[] = [
+// カタログ定義（category は categories.ts の BUILTIN_CATEGORY から自動付与）
+const catalogBase: Omit<LineArt, "category">[] = [
   { id: "trex", name: "ティラノサウルス", svg: trexSvg },
   { id: "triceratops", name: "トリケラトプス", svg: triceratopsSvg },
   { id: "stegosaurus", name: "ステゴサウルス", svg: stegosaurusSvg },
@@ -48,12 +55,22 @@ export const catalog: LineArt[] = [
   { id: "butterfly", name: "ちょうちょ", svg: butterflySvg },
 ];
 
+export const catalog: LineArt[] = catalogBase.map((a) => ({
+  ...a,
+  category: BUILTIN_CATEGORY[a.id],
+}));
+
 export function getLineArt(id: string): LineArt | undefined {
   return catalog.find((a) => a.id === id);
 }
 
 export function svgToDataUrl(svg: string): string {
   return "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+/** 下絵カードや線画描画に使う画像ソース（組み込み SVG or アップロード画像）を返す */
+export function lineArtSrc(art: LineArt): string {
+  return art.imageUrl ?? svgToDataUrl(art.svg ?? "");
 }
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
@@ -65,7 +82,7 @@ export function loadLineArtImage(art: LineArt): Promise<HTMLImageElement> {
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = reject;
-      img.src = svgToDataUrl(art.svg);
+      img.src = lineArtSrc(art);
     });
     imageCache.set(art.id, p);
   }
