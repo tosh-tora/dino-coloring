@@ -1,3 +1,10 @@
 {
-  "items": []
+  "items": [
+    {
+      "id": "shared-spinosaurus",
+      "name": "スピノサウルス（AI）",
+      "category": "cat-dino",
+      "file": "shared-spinosaurus.png"
+    }
+  ]
 }
