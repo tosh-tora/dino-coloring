@@ -191,6 +191,295 @@ body {
   cursor: pointer;
 }
 
+/* ---------------------------------------------------------------- maker button */
+
+/* 下絵メーカー起動ボタン（長押し）。進捗リングを重ねるため相対配置にする */
+.maker-btn {
+  position: relative;
+}
+
+.custom-card {
+  outline: 3px solid #ffd9a0;
+  outline-offset: -3px;
+}
+
+/* ---------------------------------------------------------------- template maker */
+
+.template-maker {
+  position: relative;
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 28px 28px 32px;
+  width: min(560px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tm-heading {
+  font-size: 22px;
+  color: #2c5237;
+  margin: 0;
+}
+
+.tm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tm-section h2 {
+  font-size: 22px;
+  color: #3a7a52;
+  margin: 0;
+}
+
+.tm-desc {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #666;
+  margin: 0;
+}
+
+.tm-input {
+  font-size: 18px;
+  padding: 14px 16px;
+  border: 2px solid #cfe6d8;
+  border-radius: 14px;
+  outline: none;
+}
+
+.tm-input:focus {
+  border-color: #7cc199;
+}
+
+.tm-btn {
+  align-self: flex-start;
+  font-size: 20px;
+  font-weight: bold;
+  color: #fff;
+  background: #57b981;
+  border: none;
+  border-radius: 16px;
+  padding: 14px 26px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+
+.tm-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.tm-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tm-upload {
+  background: #f0932b;
+}
+
+.tm-output {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border: 2px solid #cfe6d8;
+  border-radius: 14px;
+  background: #f7fbf8;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tm-toast {
+  font-size: 16px;
+  font-weight: bold;
+  color: #3a7a52;
+}
+
+.tm-file {
+  display: none;
+}
+
+.tm-select {
+  font-size: 18px;
+  background: #fff;
+}
+
+/* ---------------------------------------------------------------- filter bar */
+
+.filter-bar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 12px 24px 4px;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: bold;
+  color: #3a7a52;
+  background: #eaf6ee;
+  border: 2px solid #cfe6d8;
+  border-radius: 999px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.filter-chip.active {
+  color: #fff;
+  background: #57b981;
+  border-color: #57b981;
+}
+
+/* ---------------------------------------------------------------- adult menu */
+
+.adult-menu {
+  position: relative;
+  background: #fff;
+  border-radius: 28px;
+  padding: 32px 28px;
+  width: min(460px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.menu-btn {
+  font-size: 20px;
+  font-weight: bold;
+  color: #2c5237;
+  background: #eef7f0;
+  border: none;
+  border-radius: 18px;
+  padding: 22px 20px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  text-align: left;
+}
+
+.menu-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* ---------------------------------------------------------------- manage / category editor */
+
+.manage,
+.cat-editor {
+  position: relative;
+  background: #fff;
+  border-radius: 28px;
+  padding: 28px;
+  width: min(620px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 2px solid #eee;
+  border-radius: 14px;
+}
+
+.manage-row.row-hidden {
+  opacity: 0.5;
+}
+
+.manage-thumb {
+  width: 64px;
+  height: 48px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.manage-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.manage-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #444;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manage-origin {
+  font-size: 12px;
+  color: #999;
+}
+
+.manage-select {
+  flex: 0 0 auto;
+  font-size: 15px;
+  padding: 8px 10px;
+  border: 2px solid #cfe6d8;
+  border-radius: 10px;
+  background: #fff;
+  max-width: 40vw;
+}
+
+.manage-actions {
+  flex: 0 0 auto;
+}
+
+.manage-icon {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  border: none;
+  border-radius: 12px;
+  background: #f0f0f0;
+  cursor: pointer;
+}
+
+.manage-icon.danger {
+  background: #fdecea;
+}
+
+.manage-icon:active {
+  transform: translateY(2px);
+}
+
+.cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cat-row .tm-input {
+  flex: 1;
+}
+
 /* ---------------------------------------------------------------- coloring */
 
 .workspace {

@@ -1,18 +1,65 @@
 // 画面遷移 (ライブラリー / ぬりえ / ギャラリー) と composition root
 import "./style.css";
-import { catalog, svgToDataUrl, drawLineArt, CANVAS_W, CANVAS_H, LineArt } from "./lineart";
+import { catalog, lineArtSrc, drawLineArt, CANVAS_W, CANVAS_H, LineArt } from "./lineart";
 import { PaintEngine } from "./paint";
 import { buildToolbar, bindLongPress } from "./tools";
 import * as store from "./store";
 import { celebrate } from "./celebrate";
 import { blip, startBgm, stopBgm, startBrush, stopBrush, makeMuteButton } from "./audio";
+import { processUploadedImage, buildColoringPrompt, copyToClipboard } from "./template";
+import { loadSharedArts } from "./shared";
+import type { Category } from "./categories";
 
 const app = document.getElementById("app")!;
+
+// ライブラリーの分類フィルター（null = ぜんぶ）。再描画をまたいで保持する。
+let libraryFilter: string | null = null;
+
+type ArtOrigin = "builtin" | "shared" | "local";
+
+/** 3供給元の下絵をまとめて取得し、有効カテゴリー・非表示を算出して返す。 */
+async function collectArts(): Promise<{
+  categories: Category[];
+  arts: { art: LineArt; origin: ArtOrigin; category: string | null; hidden: boolean }[];
+}> {
+  const [templates, categories, artMeta, sharedArts] = await Promise.all([
+    store.getTemplates().catch(() => []),
+    store.getCategories().catch(() => [] as Category[]),
+    store.getArtMeta().catch(() => new Map<string, store.ArtMeta>()),
+    loadSharedArts().catch(() => [] as LineArt[]),
+  ]);
+  const validIds = new Set(categories.map((c) => c.id));
+  const localArts: LineArt[] = templates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    imageUrl: t.imageUrl,
+  }));
+
+  const build = (art: LineArt, origin: ArtOrigin) => {
+    const meta = artMeta.get(art.id);
+    const hidden = meta?.hidden ?? false;
+    // meta があればその categoryId を優先（null=みぶんるい）。無ければ既定 category。
+    let category = meta ? meta.categoryId : art.category ?? null;
+    if (category && !validIds.has(category)) category = null; // 削除済みカテゴリーは未分類扱い
+    return { art, origin, category, hidden };
+  };
+
+  const arts = [
+    ...localArts.map((a) => build(a, "local" as const)),
+    ...sharedArts.map((a) => build(a, "shared" as const)),
+    ...catalog.map((a) => build(a, "builtin" as const)),
+  ];
+  return { categories, arts };
+}
 
 // ---------------------------------------------------------------- library
 
 async function showLibrary() {
   const workIds = await store.getWorkIds().catch(() => new Set<string>());
+  const { categories, arts } = await collectArts();
+
+  // 削除済みカテゴリーが選択中なら「ぜんぶ」に戻す
+  if (libraryFilter && !categories.some((c) => c.id === libraryFilter)) libraryFilter = null;
 
   app.innerHTML = "";
   const screen = document.createElement("div");
@@ -22,6 +69,15 @@ async function showLibrary() {
   header.className = "topbar";
   const title = document.createElement("h1");
   title.textContent = "🦕 ぬりえ をえらぼう";
+  // おとなメニューは大人向け機能。長押しで起動する（誤操作防止）
+  const makerBtn = document.createElement("button");
+  makerBtn.className = "nav-btn maker-btn longpress";
+  makerBtn.textContent = "🖊️";
+  makerBtn.title = "おとなメニュー（長押し）";
+  bindLongPress(makerBtn, 800, () => {
+    blip(720);
+    showAdultMenu();
+  });
   const galleryBtn = document.createElement("button");
   galleryBtn.className = "nav-btn";
   galleryBtn.textContent = "🖼️";
@@ -30,16 +86,36 @@ async function showLibrary() {
     blip(600);
     showGallery();
   });
-  header.append(title, makeMuteButton(), galleryBtn);
+  header.append(title, makeMuteButton(), makerBtn, galleryBtn);
   screen.appendChild(header);
+
+  // 分類チップ（「ぜんぶ」＋各カテゴリー）
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+  const addChip = (label: string, value: string | null) => {
+    const chip = document.createElement("button");
+    chip.className = "filter-chip" + (libraryFilter === value ? " active" : "");
+    chip.textContent = label;
+    chip.addEventListener("click", () => {
+      libraryFilter = value;
+      blip(560);
+      showLibrary();
+    });
+    filterBar.appendChild(chip);
+  };
+  addChip("ぜんぶ", null);
+  for (const c of categories) addChip(c.name, c.id);
+  screen.appendChild(filterBar);
 
   const grid = document.createElement("div");
   grid.className = "library-grid";
-  for (const art of catalog) {
+
+  const makeCard = (art: LineArt, origin: ArtOrigin) => {
     const card = document.createElement("button");
-    card.className = "art-card";
+    const local = origin === "local";
+    card.className = "art-card" + (local ? " custom-card longpress" : "");
     const img = document.createElement("img");
-    img.src = svgToDataUrl(art.svg);
+    img.src = lineArtSrc(art);
     img.alt = art.name;
     img.draggable = false;
     const label = document.createElement("span");
@@ -60,8 +136,26 @@ async function showLibrary() {
         showColoring(art, false);
       }
     });
-    grid.appendChild(card);
+    // ローカル下絵は長押しで削除（おとな向け操作）
+    if (local) {
+      bindLongPress(card, 1500, async () => {
+        await store.deleteTemplate(art.id).catch(() => {});
+        showLibrary();
+      });
+    }
+    return card;
+  };
+
+  const visible = arts.filter(
+    (a) => !a.hidden && (libraryFilter === null || a.category === libraryFilter)
+  );
+  if (visible.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "gallery-empty";
+    empty.textContent = "ここには まだ ないよ 🦖";
+    grid.appendChild(empty);
   }
+  for (const a of visible) grid.appendChild(makeCard(a.art, a.origin));
   screen.appendChild(grid);
   app.appendChild(screen);
 
@@ -102,6 +196,373 @@ function showResumeChooser(art: LineArt) {
   closeBtn.addEventListener("click", () => overlay.remove());
 
   box.append(resumeBtn, newBtn, closeBtn);
+  overlay.appendChild(box);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  app.appendChild(overlay);
+}
+
+// ---------------------------------------------------------------- adult menu
+
+/** 汎用オーバーレイ枠。背景クリックで閉じ、右上に✖️。 */
+function makeOverlay(boxClass: string): { overlay: HTMLDivElement; box: HTMLDivElement } {
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  const box = document.createElement("div");
+  box.className = boxClass;
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "chooser-close";
+  closeBtn.textContent = "✖️";
+  closeBtn.addEventListener("click", () => overlay.remove());
+  box.appendChild(closeBtn);
+  overlay.appendChild(box);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  return { overlay, box };
+}
+
+/** おとなメニュー（ハブ）。下絵づくり／かんり／カテゴリー編集への入口。 */
+function showAdultMenu() {
+  const { overlay, box } = makeOverlay("adult-menu");
+  const heading = document.createElement("h1");
+  heading.className = "tm-heading";
+  heading.textContent = "🔧 おとなメニュー";
+
+  const mkBtn = (label: string, onClick: () => void) => {
+    const b = document.createElement("button");
+    b.className = "menu-btn";
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      blip(660);
+      overlay.remove();
+      onClick();
+    });
+    return b;
+  };
+
+  box.append(
+    heading,
+    mkBtn("🖊️ 下絵をつくる", () => showTemplateMaker()),
+    mkBtn("🗂️ ぬりえのかんり（削除・分類）", () => showManage()),
+    mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor())
+  );
+  app.appendChild(overlay);
+}
+
+/** ぬりえのかんり: 全下絵の削除（ローカル）・非表示（組み込み/共有）・カテゴリー割当。 */
+async function showManage() {
+  const { overlay, box } = makeOverlay("manage");
+  const { categories, arts } = await collectArts();
+
+  const heading = document.createElement("h1");
+  heading.className = "tm-heading";
+  heading.textContent = "🗂️ ぬりえのかんり";
+  const desc = document.createElement("p");
+  desc.className = "tm-desc";
+  desc.textContent =
+    "分類を変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
+
+  const list = document.createElement("div");
+  list.className = "manage-list";
+
+  const originLabel: Record<ArtOrigin, string> = {
+    builtin: "組み込み",
+    shared: "共有",
+    local: "この端末",
+  };
+
+  for (const a of arts) {
+    const row = document.createElement("div");
+    row.className = "manage-row" + (a.hidden ? " row-hidden" : "");
+
+    const img = document.createElement("img");
+    img.className = "manage-thumb";
+    img.src = lineArtSrc(a.art);
+    img.draggable = false;
+
+    const info = document.createElement("div");
+    info.className = "manage-info";
+    const nm = document.createElement("div");
+    nm.className = "manage-name";
+    nm.textContent = a.art.name;
+    const org = document.createElement("div");
+    org.className = "manage-origin";
+    org.textContent = originLabel[a.origin];
+    info.append(nm, org);
+
+    // カテゴリー select
+    const sel = document.createElement("select");
+    sel.className = "manage-select";
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = "みぶんるい";
+    sel.appendChild(none);
+    for (const c of categories) {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    }
+    sel.value = a.category ?? "";
+    sel.addEventListener("change", async () => {
+      await store.setArtCategory(a.art.id, sel.value || null).catch(() => {});
+    });
+
+    // 操作ボタン
+    const actions = document.createElement("div");
+    actions.className = "manage-actions";
+    if (a.origin === "local") {
+      const del = document.createElement("button");
+      del.className = "manage-icon danger";
+      del.textContent = "🗑";
+      del.title = "削除";
+      del.addEventListener("click", async () => {
+        await store.deleteTemplate(a.art.id).catch(() => {});
+        blip(300);
+        row.remove();
+      });
+      actions.appendChild(del);
+    } else {
+      const toggle = document.createElement("button");
+      toggle.className = "manage-icon";
+      const render = () => {
+        toggle.textContent = a.hidden ? "🙈" : "👁️";
+        toggle.title = a.hidden ? "ひょうじする" : "ひひょうじにする";
+        row.classList.toggle("row-hidden", a.hidden);
+      };
+      render();
+      toggle.addEventListener("click", async () => {
+        a.hidden = !a.hidden;
+        await store.setArtHidden(a.art.id, a.hidden).catch(() => {});
+        blip(a.hidden ? 320 : 600);
+        render();
+      });
+      actions.appendChild(toggle);
+    }
+
+    row.append(img, info, sel, actions);
+    list.appendChild(row);
+  }
+
+  const foot = document.createElement("p");
+  foot.className = "tm-desc";
+  foot.textContent = "とじると ライブラリーに はんえいされます。";
+
+  box.append(heading, desc, list, foot);
+  // 閉じたらライブラリーを更新
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) showLibrary();
+  });
+  box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
+  app.appendChild(overlay);
+}
+
+/** カテゴリーのへんしゅう: 追加・リネーム・削除。 */
+async function showCategoryEditor() {
+  const { overlay, box } = makeOverlay("cat-editor");
+  const heading = document.createElement("h1");
+  heading.className = "tm-heading";
+  heading.textContent = "🏷️ カテゴリー";
+
+  const list = document.createElement("div");
+  list.className = "cat-list";
+
+  const renderList = async () => {
+    const categories = await store.getCategories().catch(() => []);
+    list.innerHTML = "";
+    for (const c of categories) {
+      const row = document.createElement("div");
+      row.className = "cat-row";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "tm-input";
+      nameInput.value = c.name;
+      nameInput.addEventListener("change", async () => {
+        const v = nameInput.value.trim();
+        if (v) await store.renameCategory(c.id, v).catch(() => {});
+      });
+      const del = document.createElement("button");
+      del.className = "manage-icon danger";
+      del.textContent = "🗑";
+      del.title = "削除";
+      del.addEventListener("click", async () => {
+        await store.deleteCategory(c.id).catch(() => {});
+        blip(300);
+        await renderList();
+      });
+      row.append(nameInput, del);
+      list.appendChild(row);
+    }
+  };
+
+  const addRow = document.createElement("div");
+  addRow.className = "cat-row";
+  const addInput = document.createElement("input");
+  addInput.type = "text";
+  addInput.className = "tm-input";
+  addInput.placeholder = "あたらしい分類（例: うみのいきもの）";
+  const addBtn = document.createElement("button");
+  addBtn.className = "tm-btn";
+  addBtn.textContent = "＋ ついか";
+  addBtn.addEventListener("click", async () => {
+    const v = addInput.value.trim();
+    if (!v) return;
+    await store.addCategory(v).catch(() => {});
+    addInput.value = "";
+    blip(680);
+    await renderList();
+  });
+  addRow.append(addInput, addBtn);
+
+  box.append(heading, list, addRow);
+  box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) showLibrary();
+  });
+  app.appendChild(overlay);
+  await renderList();
+}
+
+// ---------------------------------------------------------------- template maker
+
+/** 下絵メーカー: 生成プロンプト作成 と 画像アップロード のオーバーレイ */
+async function showTemplateMaker() {
+  const categories = await store.getCategories().catch(() => []);
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  const box = document.createElement("div");
+  box.className = "template-maker";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "chooser-close";
+  closeBtn.textContent = "✖️";
+  closeBtn.addEventListener("click", () => overlay.remove());
+
+  const heading = document.createElement("h1");
+  heading.className = "tm-heading";
+  heading.textContent = "🖊️ 下絵メーカー（おとな向け）";
+
+  // ---- セクション1: プロンプトを作る ----
+  const sec1 = document.createElement("section");
+  sec1.className = "tm-section";
+  const h1 = document.createElement("h2");
+  h1.textContent = "① プロンプトを作る";
+  const desc1 = document.createElement("p");
+  desc1.className = "tm-desc";
+  desc1.textContent =
+    "描きたいものを日本語で入力して「作る」を押すと、画像生成AI（ChatGPT など）に貼り付ける英語のプロンプトが生成され、クリップボードにコピーされます。";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "tm-input";
+  input.placeholder = "例: トリケラトプスとティラノサウルスのたたかい";
+
+  const makeBtn = document.createElement("button");
+  makeBtn.className = "tm-btn";
+  makeBtn.textContent = "作る 📋";
+
+  const output = document.createElement("textarea");
+  output.className = "tm-output";
+  output.readOnly = true;
+  output.rows = 8;
+  output.hidden = true;
+
+  const toast = document.createElement("div");
+  toast.className = "tm-toast";
+  toast.hidden = true;
+
+  makeBtn.addEventListener("click", async () => {
+    blip(680);
+    const prompt = buildColoringPrompt(input.value);
+    output.value = prompt;
+    output.hidden = false;
+    const ok = await copyToClipboard(prompt);
+    toast.textContent = ok ? "コピーしました ✅" : "コピーできませんでした。選択してコピーしてください";
+    toast.hidden = false;
+  });
+
+  sec1.append(h1, desc1, input, makeBtn, output, toast);
+
+  // ---- セクション2: 画像をアップロード ----
+  const sec2 = document.createElement("section");
+  sec2.className = "tm-section";
+  const h2 = document.createElement("h2");
+  h2.textContent = "② 画像をアップロード";
+  const desc2 = document.createElement("p");
+  desc2.className = "tm-desc";
+  desc2.textContent =
+    "AIで作った白背景の下絵画像を選ぶと、ぬりえに追加されます。名前は①の「描きたいもの」が初期値です（変更可）。";
+
+  // 名前欄。初期値は①の「描きたいもの」。ユーザーが手で編集するまでは追従する。
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.className = "tm-input";
+  nameInput.placeholder = "マイぬりえ";
+  nameInput.value = input.value;
+  let nameEdited = false;
+  nameInput.addEventListener("input", () => {
+    nameEdited = true;
+  });
+  input.addEventListener("input", () => {
+    if (!nameEdited) nameInput.value = input.value;
+  });
+
+  // カテゴリー選択（任意）。既定は「みぶんるい」。
+  const catSelect = document.createElement("select");
+  catSelect.className = "tm-input tm-select";
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "みぶんるい";
+  catSelect.appendChild(noneOpt);
+  for (const c of categories) {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name;
+    catSelect.appendChild(opt);
+  }
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/*";
+  fileInput.className = "tm-file";
+  fileInput.id = "tm-file-input";
+  const fileLabel = document.createElement("label");
+  fileLabel.className = "tm-btn tm-upload";
+  fileLabel.htmlFor = "tm-file-input";
+  fileLabel.textContent = "画像を選ぶ 🖼️";
+
+  const status = document.createElement("div");
+  status.className = "tm-toast";
+  status.hidden = true;
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    status.hidden = false;
+    status.textContent = "変換中… ⏳";
+    fileLabel.classList.add("disabled");
+    try {
+      const imageUrl = await processUploadedImage(file);
+      const createdAt = Date.now();
+      const id = "custom-" + createdAt;
+      const name = nameInput.value.trim() || "マイぬりえ";
+      await store.addTemplate({ id, name, imageUrl, createdAt });
+      if (catSelect.value) await store.setArtCategory(id, catSelect.value).catch(() => {});
+      blip(760);
+      overlay.remove();
+      showLibrary();
+    } catch {
+      status.textContent = "この画像は読み込めませんでした 😢";
+      fileLabel.classList.remove("disabled");
+      fileInput.value = "";
+    }
+  });
+
+  sec2.append(h2, desc2, nameInput, catSelect, fileLabel, fileInput, status);
+
+  box.append(closeBtn, heading, sec1, sec2);
   overlay.appendChild(box);
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) overlay.remove();
