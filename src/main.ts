@@ -4,7 +4,8 @@ import { catalog, svgToDataUrl, drawLineArt, CANVAS_W, CANVAS_H, LineArt } from 
 import { PaintEngine } from "./paint";
 import { buildToolbar, bindLongPress } from "./tools";
 import * as store from "./store";
-import { celebrate, blip } from "./celebrate";
+import { celebrate } from "./celebrate";
+import { blip, startBgm, stopBgm, startBrush, stopBrush, makeMuteButton } from "./audio";
 
 const app = document.getElementById("app")!;
 
@@ -29,7 +30,7 @@ async function showLibrary() {
     blip(600);
     showGallery();
   });
-  header.append(title, galleryBtn);
+  header.append(title, makeMuteButton(), galleryBtn);
   screen.appendChild(header);
 
   const grid = document.createElement("div");
@@ -63,6 +64,10 @@ async function showLibrary() {
   }
   screen.appendChild(grid);
   app.appendChild(screen);
+
+  // BGM は初期画面（ライブラリー）のみ。AudioContext のジェスチャ制約により
+  // 実際の再生は最初のタップ後に始まる。
+  startBgm();
 }
 
 /** 塗りかけがあるとき: つづきから / あたらしく を選ぶオーバーレイ */
@@ -107,6 +112,7 @@ function showResumeChooser(art: LineArt) {
 // ---------------------------------------------------------------- coloring
 
 async function showColoring(art: LineArt, resume: boolean) {
+  stopBgm(); // ぬりえ画面では BGM を止める
   app.innerHTML = "";
   const screen = document.createElement("div");
   screen.className = "screen coloring";
@@ -123,7 +129,7 @@ async function showColoring(art: LineArt, resume: boolean) {
   const doneBtn = document.createElement("button");
   doneBtn.className = "nav-btn done-btn";
   doneBtn.textContent = "🎉 できた！";
-  header.append(backBtn, artTitle, doneBtn);
+  header.append(backBtn, artTitle, makeMuteButton(), doneBtn);
   screen.appendChild(header);
 
   // ---- 中央: 2 レイヤー canvas ----
@@ -168,7 +174,10 @@ async function showColoring(art: LineArt, resume: boolean) {
   };
 
   const toolbar = buildToolbar(engine, () => engine.clearAll());
+  // ドラッグ中は塗り/消しゴム音を継続再生する
+  engine.onStrokeStart = () => startBrush(engine.getMode());
   engine.onStrokeEnd = () => {
+    stopBrush();
     toolbar.refresh();
     scheduleSave();
   };
@@ -185,11 +194,13 @@ async function showColoring(art: LineArt, resume: boolean) {
   }
 
   const pagehide = () => {
+    stopBrush();
     void flushSave();
   };
   window.addEventListener("pagehide", pagehide);
 
   backBtn.addEventListener("click", async () => {
+    stopBrush();
     blip(420);
     window.removeEventListener("pagehide", pagehide);
     await flushSave();
@@ -198,6 +209,7 @@ async function showColoring(art: LineArt, resume: boolean) {
 
   doneBtn.addEventListener("click", async () => {
     doneBtn.disabled = true;
+    stopBrush();
     await flushSave();
     // 白背景 + 塗り + 線画を合成して完成作品にする
     const composite = document.createElement("canvas");
@@ -224,6 +236,7 @@ async function showColoring(art: LineArt, resume: boolean) {
 // ---------------------------------------------------------------- gallery
 
 async function showGallery() {
+  stopBgm(); // ギャラリーでは BGM を止める
   const items = await store.getGallery().catch(() => []);
 
   app.innerHTML = "";
@@ -241,7 +254,7 @@ async function showGallery() {
   });
   const title = document.createElement("h1");
   title.textContent = "🖼️ できた さくひん";
-  header.append(backBtn, title);
+  header.append(backBtn, title, makeMuteButton());
   screen.appendChild(header);
 
   const grid = document.createElement("div");
