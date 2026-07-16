@@ -11,6 +11,30 @@
       "name": "トリケラトプスとティラノサウルスのたたかい",
       "category": "cat-dino",
       "file": "shared-trex-vs-triceratops.png"
+    },
+    {
+      "id": "shared-ankylo-vs-trex",
+      "name": "アンキロサウルスとティラノサウルスのたたかい",
+      "category": "cat-dino",
+      "file": "shared-ankylo-vs-trex.png"
+    },
+    {
+      "id": "shared-ankylosaurus",
+      "name": "アンキロサウルス",
+      "category": "cat-dino",
+      "file": "shared-ankylosaurus.png"
+    },
+    {
+      "id": "shared-purussaurus-paraceratherium",
+      "name": "プルスサウルスとパラケラテリウムのたたかい",
+      "category": "cat-extinct",
+      "file": "shared-purussaurus-paraceratherium.png"
+    },
+    {
+      "id": "shared-ankylo-trex",
+      "name": "アンキロサウルスとティラノサウルス",
+      "category": "cat-dino",
+      "file": "shared-ankylo-trex.png"
     }
   ]
 }
