@@ -29,6 +29,12 @@
       "name": "アンキロサウルスとティラノサウルス",
       "category": "cat-dino",
       "file": "shared-ankylo-trex.png"
+    },
+    {
+      "id": "shared-ankylosaurus-vs-trex",
+      "name": "アンキロサウルス vs ティラノサウルス",
+      "category": "cat-dino",
+      "file": "shared-ankylosaurus-vs-trex.png"
     }
   ]
 }
