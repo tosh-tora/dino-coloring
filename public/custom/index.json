@@ -25,12 +25,6 @@
       "file": "shared-purussaurus-paraceratherium.png"
     },
     {
-      "id": "shared-ankylo-trex",
-      "name": "アンキロサウルスとティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-ankylo-trex.png"
-    },
-    {
       "id": "shared-ankylosaurus-vs-trex",
       "name": "アンキロサウルス vs ティラノサウルス",
       "category": "cat-dino",
