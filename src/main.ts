@@ -6,7 +6,13 @@ import { buildToolbar, bindLongPress } from "./tools";
 import * as store from "./store";
 import { celebrate } from "./celebrate";
 import { blip, startBgm, stopBgm, startBrush, stopBrush, makeMuteButton } from "./audio";
-import { processUploadedImage, buildColoringPrompt, copyToClipboard } from "./template";
+import {
+  processUploadedImage,
+  buildColoringPrompt,
+  copyToClipboard,
+  DEFAULT_PROMPT_OPTIONS,
+  type PromptOptions,
+} from "./template";
 import { loadSharedArts } from "./shared";
 import type { Category } from "./categories";
 
@@ -427,6 +433,75 @@ async function showCategoryEditor() {
 
 // ---------------------------------------------------------------- template maker
 
+const PROMPT_OPTIONS_KEY = "dino-coloring:prompt-options";
+
+/** プロンプトオプションの各軸のUIラベルと選択肢（チップの表示順） */
+const PROMPT_OPTION_DEFS: {
+  key: keyof PromptOptions;
+  label: string;
+  choices: { value: string; label: string }[];
+}[] = [
+  {
+    key: "style",
+    label: "画風",
+    choices: [
+      { value: "cute", label: "かわいい" },
+      { value: "normal", label: "ふつう" },
+      { value: "realistic", label: "リアル" },
+    ],
+  },
+  {
+    key: "line",
+    label: "線の太さ",
+    choices: [
+      { value: "thick", label: "ふとい" },
+      { value: "normal", label: "ふつう" },
+      { value: "thin", label: "ほそめ" },
+    ],
+  },
+  {
+    key: "background",
+    label: "背景",
+    choices: [
+      { value: "none", label: "なし" },
+      { value: "simple", label: "シンプル" },
+      { value: "full", label: "しっかり" },
+    ],
+  },
+  {
+    key: "detail",
+    label: "細かさ",
+    choices: [
+      { value: "very-easy", label: "とてもかんたん" },
+      { value: "easy", label: "かんたん" },
+      { value: "normal", label: "ふつう" },
+    ],
+  },
+];
+
+/** 保存済みのプロンプトオプションを読む。不正値・未保存はデフォルトにフォールバック。 */
+function loadPromptOptions(): PromptOptions {
+  const opts: Record<string, string> = { ...DEFAULT_PROMPT_OPTIONS };
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROMPT_OPTIONS_KEY) ?? "");
+    for (const def of PROMPT_OPTION_DEFS) {
+      const v = saved?.[def.key];
+      if (def.choices.some((c) => c.value === v)) opts[def.key] = v;
+    }
+  } catch {
+    // 未保存や壊れた値はデフォルトのまま
+  }
+  return opts as unknown as PromptOptions;
+}
+
+function savePromptOptions(opts: PromptOptions) {
+  try {
+    localStorage.setItem(PROMPT_OPTIONS_KEY, JSON.stringify(opts));
+  } catch {
+    // 保存できなくても機能には影響しない
+  }
+}
+
 /** 下絵メーカー: 生成プロンプト作成 と 画像アップロード のオーバーレイ */
 async function showTemplateMaker() {
   const categories = await store.getCategories().catch(() => []);
@@ -459,6 +534,36 @@ async function showTemplateMaker() {
   input.className = "tm-input";
   input.placeholder = "例: トリケラトプスとティラノサウルスのたたかい";
 
+  // 画像の感じの指定チップ（各軸で排他選択）。選択は localStorage に保存して次回復元。
+  const promptOpts = loadPromptOptions();
+  const optionsBox = document.createElement("div");
+  optionsBox.className = "tm-options";
+  for (const def of PROMPT_OPTION_DEFS) {
+    const row = document.createElement("div");
+    row.className = "tm-option-row";
+    const label = document.createElement("span");
+    label.className = "tm-option-label";
+    label.textContent = def.label;
+    row.appendChild(label);
+    const chips: HTMLButtonElement[] = [];
+    for (const choice of def.choices) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tm-chip";
+      chip.textContent = choice.label;
+      chip.classList.toggle("active", promptOpts[def.key] === choice.value);
+      chip.addEventListener("click", () => {
+        (promptOpts as unknown as Record<string, string>)[def.key] = choice.value;
+        for (const c of chips) c.classList.toggle("active", c === chip);
+        savePromptOptions(promptOpts);
+        blip(600);
+      });
+      chips.push(chip);
+      row.appendChild(chip);
+    }
+    optionsBox.appendChild(row);
+  }
+
   const makeBtn = document.createElement("button");
   makeBtn.className = "tm-btn";
   makeBtn.textContent = "作る 📋";
@@ -475,7 +580,7 @@ async function showTemplateMaker() {
 
   makeBtn.addEventListener("click", async () => {
     blip(680);
-    const prompt = buildColoringPrompt(input.value);
+    const prompt = buildColoringPrompt(input.value, promptOpts);
     output.value = prompt;
     output.hidden = false;
     const ok = await copyToClipboard(prompt);
@@ -483,7 +588,7 @@ async function showTemplateMaker() {
     toast.hidden = false;
   });
 
-  sec1.append(h1, desc1, input, makeBtn, output, toast);
+  sec1.append(h1, desc1, input, optionsBox, makeBtn, output, toast);
 
   // ---- セクション2: 画像をアップロード ----
   const sec2 = document.createElement("section");
