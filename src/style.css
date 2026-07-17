@@ -310,6 +310,44 @@ body {
   background: #fff;
 }
 
+.tm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tm-option-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tm-option-label {
+  flex: 0 0 84px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #666;
+}
+
+.tm-chip {
+  font-size: 15px;
+  font-weight: bold;
+  color: #3a7a52;
+  background: #eaf6ee;
+  border: 2px solid #cfe6d8;
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.tm-chip.active {
+  color: #fff;
+  background: #57b981;
+  border-color: #57b981;
+}
+
 /* ---------------------------------------------------------------- filter bar */
 
 .filter-bar {

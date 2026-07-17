@@ -64,23 +64,70 @@ export async function processUploadedImage(file: File): Promise<string> {
   return imageToTransparentDataUrl(img);
 }
 
+/** プロンプトの画風・線・背景・細かさの指定。 */
+export interface PromptOptions {
+  style: "cute" | "normal" | "realistic";
+  line: "thick" | "normal" | "thin";
+  background: "none" | "simple" | "full";
+  detail: "very-easy" | "easy" | "normal";
+}
+
+/** 現行テンプレートと同等の既定値（かわいい・ふとい・背景なし・かんたん）。 */
+export const DEFAULT_PROMPT_OPTIONS: PromptOptions = {
+  style: "cute",
+  line: "thick",
+  background: "none",
+  detail: "easy",
+};
+
+const STYLE_LINES: Record<PromptOptions["style"], string> = {
+  cute: "- Cute, friendly cartoon style. Simple and cheerful.",
+  normal: "- Clean, friendly illustration style.",
+  realistic:
+    "- Realistic, encyclopedia-style illustration with accurate proportions and anatomy.",
+};
+
+const LINE_LINES: Record<PromptOptions["line"], string> = {
+  thick: "- Bold, thick, smooth, continuous black outlines.",
+  normal: "- Medium-weight, clean, continuous black outlines.",
+  thin: "- Fine, delicate, continuous black outlines.",
+};
+
+const BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
+  none: "- Pure white background with no background elements. The whole subject is fully visible and centered, with generous white space around it.",
+  simple:
+    "- A simple background with just a few large, easy-to-color elements (e.g. a ground line, a plant, clouds).",
+  full: "- A full scene background filling the frame (sky, terrain, plants) drawn in the same line-art style.",
+};
+
+const DETAIL_LINES: Record<PromptOptions["detail"], string> = {
+  "very-easy":
+    "- Extremely simple with very few lines and very large regions, perfect for toddlers to color inside.",
+  easy: "- Simple with few lines and large, clearly separated regions that are easy for young children to color inside.",
+  normal:
+    "- Moderate detail with clearly separated regions, still easy for children to color inside.",
+};
+
 /**
  * 日本語の主題から、外部の画像生成AIに貼り付けるための英語塗り絵線画プロンプトを作る。
  * このアプリはバックエンド無しのため主題の英訳はせず、主題を Subject にそのまま埋め込む
  * （近年の画像生成AIは日本語主題も解釈できる）。
  */
-export function buildColoringPrompt(theme: string): string {
+export function buildColoringPrompt(
+  theme: string,
+  opts: PromptOptions = DEFAULT_PROMPT_OPTIONS,
+): string {
   const subject = theme.trim() || "a cute dinosaur";
   return [
     "Black-and-white coloring book line art for young children.",
     `Subject: ${subject}`,
     "",
     "Style requirements:",
-    "- Bold, clean, continuous black outlines on a pure white background.",
+    LINE_LINES[opts.line],
     "- Outlines only. No shading, no gray tones, no color, no fills, no textures.",
-    "- Thick, smooth lines with large, clearly separated regions that are easy to color inside.",
-    "- Cute, friendly cartoon style. Simple and cheerful.",
-    "- The whole subject is fully visible and centered, with generous white space around it.",
+    DETAIL_LINES[opts.detail],
+    STYLE_LINES[opts.style],
+    BACKGROUND_LINES[opts.background],
     "- Landscape orientation, 4:3 aspect ratio.",
     "- No text, no watermark, no border frame.",
   ].join("\n");
