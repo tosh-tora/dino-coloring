@@ -29,6 +29,24 @@
       "name": "アンキロサウルス vs ティラノサウルス",
       "category": "cat-dino",
       "file": "shared-ankylosaurus-vs-trex.png"
+    },
+    {
+      "id": "shared-pachycephalosaurus",
+      "name": "パキケファロサウルス",
+      "category": "cat-dino",
+      "file": "shared-pachycephalosaurus.png"
+    },
+    {
+      "id": "shared-pachycephalosaurus-realistic",
+      "name": "パキケファロサウルス",
+      "category": "cat-dino",
+      "file": "shared-pachycephalosaurus-realistic.png"
+    },
+    {
+      "id": "shared-hercules-beetle",
+      "name": "ヘラクレスオオカブト",
+      "category": "cat-animal",
+      "file": "shared-hercules-beetle.png"
     }
   ]
 }
