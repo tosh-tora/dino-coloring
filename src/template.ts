@@ -3,7 +3,7 @@
 import { CANVAS_W, CANVAS_H } from "./lineart";
 
 /** File を Image 要素に読み込む */
-function fileToImage(file: File): Promise<HTMLImageElement> {
+export function fileToImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -58,10 +58,101 @@ export function imageToTransparentDataUrl(img: HTMLImageElement): string {
   return canvas.toDataURL("image/png");
 }
 
-/** アップロードされた画像ファイルを透明背景の下絵 data URL に変換する。 */
-export async function processUploadedImage(file: File): Promise<string> {
-  const img = await fileToImage(file);
-  return imageToTransparentDataUrl(img);
+/**
+ * 写真っぽい画像かどうかの簡易判定（ぬりえ化トグルの初期値に使う）。
+ * 白背景＋黒線の線画は白・黒に画素が寄るので、中間調や有彩色の画素が
+ * 一定割合を超えたら写真とみなす。
+ */
+export function isPhotoLike(img: HTMLImageElement): boolean {
+  const N = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = N;
+  canvas.height = N;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, N, N);
+  ctx.drawImage(img, 0, 0, N, N);
+  const px = ctx.getImageData(0, 0, N, N).data;
+  let busy = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i];
+    const g = px[i + 1];
+    const b = px[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+    if (chroma > 40 || (lum > 90 && lum < 210)) busy++;
+  }
+  return busy / (N * N) > 0.2;
+}
+
+/**
+ * 写真などの通常画像を、ぬりえ向きの太くシンプルな輪郭線画（黒線＋透明背景の
+ * 1024×768 data URL）に変換する。
+ * 縮小＋ぼかしで細部を落としてから Sobel で輪郭を取り、膨張と拡大で線を太らせる。
+ */
+export function photoToColoringDataUrl(img: HTMLImageElement): string {
+  // 処理解像度。小さくするほど細部が落ちてシンプルな線になり、
+  // 最終キャンバスへの拡大率が上がって線も太くなる。
+  const MAX = 480;
+  const s = Math.min(1, MAX / Math.max(img.width, img.height));
+  const w = Math.max(4, Math.round(img.width * s));
+  const h = Math.max(4, Math.round(img.height * s));
+
+  const small = document.createElement("canvas");
+  small.width = w;
+  small.height = h;
+  const sctx = small.getContext("2d")!;
+  sctx.fillStyle = "#fff";
+  sctx.fillRect(0, 0, w, h);
+  sctx.filter = "grayscale(1) blur(1.5px)";
+  sctx.drawImage(img, 0, 0, w, h);
+  sctx.filter = "none";
+
+  const src = sctx.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) lum[i] = src[i * 4]; // grayscale 済みなので R 成分でよい
+
+  // Sobel で輪郭抽出
+  const THRESHOLD = 70;
+  const edge = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const gx =
+        -lum[i - w - 1] - 2 * lum[i - 1] - lum[i + w - 1] +
+        lum[i - w + 1] + 2 * lum[i + 1] + lum[i + w + 1];
+      const gy =
+        -lum[i - w - 1] - 2 * lum[i - w] - lum[i - w + 1] +
+        lum[i + w - 1] + 2 * lum[i + w] + lum[i + w + 1];
+      if (Math.hypot(gx, gy) > THRESHOLD) edge[i] = 1;
+    }
+  }
+
+  // 膨張1回で線を太らせる（このあとの拡大でさらに太くなる）
+  const fat = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (edge[i] || edge[i - 1] || edge[i + 1] || edge[i - w] || edge[i + w]) fat[i] = 1;
+    }
+  }
+
+  // 黒線＋透明背景にして 1024×768 へ contain 配置
+  const lineData = sctx.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) lineData.data[i * 4 + 3] = fat[i] ? 255 : 0;
+  sctx.putImageData(lineData, 0, 0);
+
+  const out = document.createElement("canvas");
+  out.width = CANVAS_W;
+  out.height = CANVAS_H;
+  const octx = out.getContext("2d")!;
+  const k = Math.min(CANVAS_W / w, CANVAS_H / h);
+  const dw = w * k;
+  const dh = h * k;
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = "high";
+  octx.drawImage(small, (CANVAS_W - dw) / 2, (CANVAS_H - dh) / 2, dw, dh);
+  return out.toDataURL("image/png");
 }
 
 /** プロンプトの画風・線・背景・細かさの指定。 */
@@ -88,9 +179,9 @@ const STYLE_LINES: Record<PromptOptions["style"], string> = {
 };
 
 const LINE_LINES: Record<PromptOptions["line"], string> = {
-  thick: "- Bold, thick, smooth, continuous black outlines.",
-  normal: "- Medium-weight, clean, continuous black outlines.",
-  thin: "- Fine, delicate, continuous black outlines.",
+  thick: "- Extra bold, very thick, smooth, continuous black outlines.",
+  normal: "- Bold, thick, smooth, continuous black outlines.",
+  thin: "- Medium-weight, clean, continuous black outlines. Not fine or delicate lines.",
 };
 
 const BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
