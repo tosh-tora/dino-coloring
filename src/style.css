@@ -348,6 +348,26 @@ body {
   border-color: #57b981;
 }
 
+.tm-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tm-pick-row .tm-btn {
+  align-self: auto;
+}
+
+.tm-preview {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
+  border: 2px solid #cfe6d8;
+  border-radius: 14px;
+}
+
 /* ---------------------------------------------------------------- filter bar */
 
 .filter-bar {
