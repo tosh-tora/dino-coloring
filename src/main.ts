@@ -7,10 +7,7 @@ import * as store from "./store";
 import { celebrate } from "./celebrate";
 import { blip, startBgm, stopBgm, startBrush, stopBrush, makeMuteButton } from "./audio";
 import {
-  fileToImage,
-  imageToTransparentDataUrl,
-  isPhotoLike,
-  photoToColoringDataUrl,
+  processUploadedImage,
   buildColoringPrompt,
   copyToClipboard,
   DEFAULT_PROMPT_OPTIONS,
@@ -601,7 +598,7 @@ async function showTemplateMaker() {
   const desc2 = document.createElement("p");
   desc2.className = "tm-desc";
   desc2.textContent =
-    "画像を選ぶかカメラで撮ると、ぬりえ用の下絵に変換して追加できます。写真は輪郭を取り出して太くシンプルな線画（ぬりえ化）にします。名前は①の「描きたいもの」が初期値です（変更可）。";
+    "AIで作った白背景の下絵画像を選ぶと、ぬりえに追加されます。名前は①の「描きたいもの」が初期値です（変更可）。";
 
   // 名前欄。初期値は①の「描きたいもの」。ユーザーが手で編集するまでは追従する。
   const nameInput = document.createElement("input");
@@ -631,7 +628,6 @@ async function showTemplateMaker() {
     catSelect.appendChild(opt);
   }
 
-  // 取得ボタン: ファイル選択 と カメラ撮影（capture 指定。非対応環境では通常の選択になる）
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "image/*";
@@ -642,109 +638,34 @@ async function showTemplateMaker() {
   fileLabel.htmlFor = "tm-file-input";
   fileLabel.textContent = "画像を選ぶ 🖼️";
 
-  const cameraInput = document.createElement("input");
-  cameraInput.type = "file";
-  cameraInput.accept = "image/*";
-  cameraInput.setAttribute("capture", "environment");
-  cameraInput.className = "tm-file";
-  cameraInput.id = "tm-camera-input";
-  const cameraLabel = document.createElement("label");
-  cameraLabel.className = "tm-btn tm-upload";
-  cameraLabel.htmlFor = "tm-camera-input";
-  cameraLabel.textContent = "カメラでとる 📷";
-
-  const pickRow = document.createElement("div");
-  pickRow.className = "tm-pick-row";
-  pickRow.append(fileLabel, fileInput, cameraLabel, cameraInput);
-
   const status = document.createElement("div");
   status.className = "tm-toast";
   status.hidden = true;
 
-  // ぬりえ化トグル＋プレビュー＋追加ボタン。画像を選ぶと現れる。
-  let loadedImg: HTMLImageElement | null = null;
-  let coloringify = true;
-  let previewUrl = "";
-
-  const convertRow = document.createElement("div");
-  convertRow.className = "tm-option-row";
-  convertRow.hidden = true;
-  const convertLabel = document.createElement("span");
-  convertLabel.className = "tm-option-label";
-  convertLabel.textContent = "ぬりえ化";
-  const convertChips: HTMLButtonElement[] = [];
-  for (const [value, label] of [
-    [true, "する"],
-    [false, "しない（線画のまま）"],
-  ] as const) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "tm-chip";
-    chip.textContent = label;
-    chip.addEventListener("click", () => {
-      coloringify = value;
-      renderPreview();
-      blip(600);
-    });
-    convertChips.push(chip);
-    convertRow.appendChild(chip);
-  }
-  convertRow.insertBefore(convertLabel, convertChips[0]);
-
-  const preview = document.createElement("img");
-  preview.className = "tm-preview";
-  preview.alt = "下絵プレビュー";
-  preview.hidden = true;
-
-  const addArtBtn = document.createElement("button");
-  addArtBtn.className = "tm-btn";
-  addArtBtn.textContent = "ついかする ➕";
-  addArtBtn.hidden = true;
-
-  function renderPreview() {
-    if (!loadedImg) return;
-    previewUrl = coloringify
-      ? photoToColoringDataUrl(loadedImg)
-      : imageToTransparentDataUrl(loadedImg);
-    preview.src = previewUrl;
-    preview.hidden = false;
-    convertRow.hidden = false;
-    addArtBtn.hidden = false;
-    for (const [i, chip] of convertChips.entries())
-      chip.classList.toggle("active", (i === 0) === coloringify);
-  }
-
-  async function onPicked(input: HTMLInputElement) {
-    const file = input.files?.[0];
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
     if (!file) return;
     status.hidden = false;
     status.textContent = "変換中… ⏳";
+    fileLabel.classList.add("disabled");
     try {
-      loadedImg = await fileToImage(file);
-      coloringify = isPhotoLike(loadedImg);
-      renderPreview();
-      status.textContent = "できあがりを確認して「ついかする」を押してください";
+      const imageUrl = await processUploadedImage(file);
+      const createdAt = Date.now();
+      const id = "custom-" + createdAt;
+      const name = nameInput.value.trim() || "マイぬりえ";
+      await store.addTemplate({ id, name, imageUrl, createdAt });
+      if (catSelect.value) await store.setArtCategory(id, catSelect.value).catch(() => {});
+      blip(760);
+      overlay.remove();
+      showLibrary();
     } catch {
       status.textContent = "この画像は読み込めませんでした 😢";
+      fileLabel.classList.remove("disabled");
+      fileInput.value = "";
     }
-    input.value = "";
-  }
-  fileInput.addEventListener("change", () => onPicked(fileInput));
-  cameraInput.addEventListener("change", () => onPicked(cameraInput));
-
-  addArtBtn.addEventListener("click", async () => {
-    if (!previewUrl) return;
-    const createdAt = Date.now();
-    const id = "custom-" + createdAt;
-    const name = nameInput.value.trim() || "マイぬりえ";
-    await store.addTemplate({ id, name, imageUrl: previewUrl, createdAt });
-    if (catSelect.value) await store.setArtCategory(id, catSelect.value).catch(() => {});
-    blip(760);
-    overlay.remove();
-    showLibrary();
   });
 
-  sec2.append(h2, desc2, nameInput, catSelect, pickRow, status, convertRow, preview, addArtBtn);
+  sec2.append(h2, desc2, nameInput, catSelect, fileLabel, fileInput, status);
 
   box.append(closeBtn, heading, sec1, sec2);
   overlay.appendChild(box);
