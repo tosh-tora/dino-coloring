@@ -47,6 +47,30 @@
       "name": "ヘラクレスオオカブト",
       "category": "cat-animal",
       "file": "shared-hercules-beetle.png"
+    },
+    {
+      "id": "shared-snake",
+      "name": "へび",
+      "category": "cat-animal",
+      "file": "shared-snake.png"
+    },
+    {
+      "id": "shared-stegosaurus",
+      "name": "ステゴサウルス",
+      "category": "cat-dino",
+      "file": "shared-stegosaurus.png"
+    },
+    {
+      "id": "shared-pteranodon",
+      "name": "プテラノドン",
+      "category": "cat-dino",
+      "file": "shared-pteranodon.png"
+    },
+    {
+      "id": "shared-stegosaurus-vs-triceratops",
+      "name": "ステゴサウルスとトリケラトプスのつなひき",
+      "category": "cat-dino",
+      "file": "shared-stegosaurus-vs-triceratops.png"
     }
   ]
 }
