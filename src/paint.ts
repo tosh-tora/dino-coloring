@@ -5,6 +5,14 @@ export type PaintMode = "normal" | "mix" | "erase";
 
 const UNDO_DEPTH = 12;
 
+// ---- はみだしガード ----
+/** この alpha 以上の線画ピクセルを「線」（塗りの障壁）とみなす */
+const LINE_ALPHA = 48;
+/** 線の内側へ塗り込みを許す深さ (px)。線と塗りの間に白い隙間ができるのを防ぐ */
+const LINE_OVERLAP = 20;
+/** ストローク開始点が線の上だったとき、近くの空きピクセルを探す半径 (px) */
+const SEED_SEARCH = 24;
+
 export class PaintEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -23,6 +31,28 @@ export class PaintEngine {
   private activePointer: number | null = null;
   private points: { x: number; y: number }[] = [];
 
+  // はみだしガード: 線画から作る障壁マップと、ストローク中の塗り許可マスク
+  /** 1 = 線 (障壁)。setLineart で線画レイヤーから作る */
+  private barrier: Uint8Array | null = null;
+  /** 線を越えて塗るのに必要なドラッグ距離 (px)。0 = ガードなし */
+  private guardThreshold = 0;
+  /** ストローク中の塗り許可マスク (1 = 塗ってよい)。いまいる領域だけを表し、
+   *  閾値を超えて別領域へ抜けると作り直される。null = このストロークはガードなし */
+  private mask: Uint8Array | null = null;
+  /** mask と同内容の alpha 画像。destination-in でストロークをクリップするのに使う */
+  private maskData: ImageData | null = null;
+  private maskCanvas: HTMLCanvasElement;
+  private maskCtx: CanvasRenderingContext2D;
+  private maskBuf: Uint8Array | null = null;
+  private floodQueue: Int32Array | null = null;
+  /** 最後にマスク内にいた位置。ここからの距離が閾値を超えたら領域を切り替える */
+  private lastInside: { x: number; y: number } | null = null;
+  /** 領域を切り替えるとき、旧領域ぶんの描画を確定させておくバッファ。
+   *  これにより越えた先で塗った分を残したまま、マスクをいまの領域だけに戻せる */
+  private strokeAccum: HTMLCanvasElement;
+  private accumCtx: CanvasRenderingContext2D;
+  private hasAccum = false;
+
   onStrokeStart: (() => void) | null = null;
   onStrokeEnd: (() => void) | null = null;
 
@@ -33,6 +63,14 @@ export class PaintEngine {
     this.strokeBuf.width = canvas.width;
     this.strokeBuf.height = canvas.height;
     this.strokeCtx = this.strokeBuf.getContext("2d")!;
+    this.maskCanvas = document.createElement("canvas");
+    this.maskCanvas.width = canvas.width;
+    this.maskCanvas.height = canvas.height;
+    this.maskCtx = this.maskCanvas.getContext("2d")!;
+    this.strokeAccum = document.createElement("canvas");
+    this.strokeAccum.width = canvas.width;
+    this.strokeAccum.height = canvas.height;
+    this.accumCtx = this.strokeAccum.getContext("2d")!;
 
     canvas.addEventListener("pointerdown", this.onDown);
     canvas.addEventListener("pointermove", this.onMove);
@@ -52,6 +90,21 @@ export class PaintEngine {
   }
   getMode(): PaintMode {
     return this.mode;
+  }
+  /** 線画レイヤーを渡すと、はみだしガード用の障壁マップを作る（塗りと同サイズ前提） */
+  setLineart(lineartCanvas: HTMLCanvasElement) {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const data = lineartCanvas.getContext("2d")!.getImageData(0, 0, w, h).data;
+    const barrier = new Uint8Array(w * h);
+    for (let i = 0; i < barrier.length; i++) {
+      if (data[i * 4 + 3] >= LINE_ALPHA) barrier[i] = 1;
+    }
+    this.barrier = barrier;
+  }
+  /** はみだしガードの閾値 (px)。0 でガードなし */
+  setGuardThreshold(px: number) {
+    this.guardThreshold = px;
   }
   get canUndo(): boolean {
     return this.undoStack.length > 0;
@@ -81,7 +134,11 @@ export class PaintEngine {
     snap.getContext("2d")!.drawImage(this.canvas, 0, 0);
     this.preStroke = snap;
 
-    this.points = [this.toCanvasPos(e)];
+    const pos = this.toCanvasPos(e);
+    this.points = [pos];
+    this.accumCtx.clearRect(0, 0, this.strokeAccum.width, this.strokeAccum.height);
+    this.hasAccum = false;
+    this.beginMask(pos);
     this.renderStroke();
     this.onStrokeStart?.();
   };
@@ -89,7 +146,11 @@ export class PaintEngine {
   private onMove = (e: PointerEvent) => {
     if (e.pointerId !== this.activePointer) return;
     const events = "getCoalescedEvents" in e ? e.getCoalescedEvents() : [e];
-    for (const ev of events) this.points.push(this.toCanvasPos(ev));
+    for (const ev of events) {
+      const pos = this.toCanvasPos(ev);
+      this.points.push(pos);
+      this.guardPoint(pos);
+    }
     this.renderStroke();
   };
 
@@ -101,18 +162,151 @@ export class PaintEngine {
       this.preStroke = null;
     }
     this.points = [];
+    this.mask = null;
+    this.lastInside = null;
     this.onStrokeEnd?.();
   };
+
+  // ---------------------------------------------------------------- guard
+
+  /** ストローク開始: 開始位置を含む閉領域をフラッドフィルして塗り許可マスクにする */
+  private beginMask(pos: { x: number; y: number }) {
+    this.mask = null;
+    this.lastInside = null;
+    if (this.guardThreshold <= 0 || !this.barrier || this.mode === "erase") return;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const seed = this.findFreeSeed(Math.round(pos.x), Math.round(pos.y));
+    if (seed < 0) return; // 周囲がすべて線: このストロークはガードなしで塗る
+    if (!this.maskBuf) this.maskBuf = new Uint8Array(w * h);
+    else this.maskBuf.fill(0);
+    if (!this.maskData) this.maskData = this.maskCtx.createImageData(w, h);
+    else this.maskData.data.fill(0);
+    this.mask = this.maskBuf;
+    this.flood(seed);
+    this.maskCtx.putImageData(this.maskData, 0, 0);
+    this.lastInside = { x: seed % w, y: Math.floor(seed / w) };
+  }
+
+  /** ガード中の点を処理: マスク内なら基準点を更新。閾値を超えて別領域へ抜けたら
+   *  マスクをその領域に切り替える。元の領域に戻るときも同じ扱いなので、戻れば
+   *  またガードが効く。 */
+  private guardPoint(pos: { x: number; y: number }) {
+    if (!this.mask || !this.lastInside) return;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const x = Math.min(w - 1, Math.max(0, Math.round(pos.x)));
+    const y = Math.min(h - 1, Math.max(0, Math.round(pos.y)));
+    const idx = y * w + x;
+    if (this.mask[idx]) {
+      this.lastInside = { x, y };
+      return;
+    }
+    const dx = x - this.lastInside.x;
+    const dy = y - this.lastInside.y;
+    if (dx * dx + dy * dy <= this.guardThreshold * this.guardThreshold) return;
+    if (this.barrier![idx]) return; // まだ線の上。線を抜けるまでは切り替えない
+    this.switchRegion(idx);
+    this.lastInside = { x, y };
+  }
+
+  /** ここまでのセグメントを strokeAccum に確定させ、マスクを seed の領域に作り直す */
+  private switchRegion(seed: number) {
+    // いまのマスクに入っていた最後の点までが旧領域のセグメント
+    let cut = this.points.length - 1;
+    while (cut > 0 && !this.insideMask(this.points[cut])) cut--;
+    const s = this.strokeCtx;
+    s.clearRect(0, 0, this.strokeBuf.width, this.strokeBuf.height);
+    this.drawPath(this.points.slice(0, cut + 1));
+    s.globalCompositeOperation = "destination-in";
+    s.drawImage(this.maskCanvas, 0, 0);
+    s.globalCompositeOperation = "source-over";
+    this.accumCtx.drawImage(this.strokeBuf, 0, 0);
+    this.hasAccum = true;
+    // 境界の点を共有して新セグメントを始める（線のところで描画がつながる）
+    this.points = this.points.slice(cut);
+    this.mask!.fill(0);
+    this.maskData!.data.fill(0);
+    this.flood(seed);
+    this.maskCtx.putImageData(this.maskData!, 0, 0);
+  }
+
+  private insideMask(p: { x: number; y: number }): boolean {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const x = Math.min(w - 1, Math.max(0, Math.round(p.x)));
+    const y = Math.min(h - 1, Math.max(0, Math.round(p.y)));
+    return this.mask![y * w + x] === 1;
+  }
+
+  /** (x,y) の近くで線でないピクセルを探す。見つからなければ -1 */
+  private findFreeSeed(x: number, y: number): number {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const barrier = this.barrier!;
+    for (let r = 0; r <= SEED_SEARCH; r++) {
+      for (let oy = -r; oy <= r; oy++) {
+        for (let ox = -r; ox <= r; ox++) {
+          if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue; // リングの外周のみ
+          const nx = x + ox;
+          const ny = y + oy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const idx = ny * w + nx;
+          if (!barrier[idx]) return idx;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /** seed（線でないピクセル）から 4 近傍フラッドフィルで mask / maskData を広げる。
+   *  線ピクセルも深さ LINE_OVERLAP まで許可に含める（線の下まで塗って白い隙間を防ぐ）が、
+   *  線を突き抜けた先の領域へは広がらない。 */
+  private flood(seed: number) {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const barrier = this.barrier!;
+    const mask = this.mask!;
+    const alpha = this.maskData!.data;
+    if (!this.floodQueue) this.floodQueue = new Int32Array(w * h);
+    const queue = this.floodQueue;
+    let head = 0;
+    let tail = 0;
+    // queue の各要素は idx + depth * 0x100000（idx < 2^20, depth <= LINE_OVERLAP）
+    const push = (idx: number, depth: number) => {
+      mask[idx] = 1;
+      alpha[idx * 4 + 3] = 255;
+      queue[tail++] = idx + depth * 0x100000;
+    };
+    const step = (idx: number, depth: number) => {
+      if (mask[idx]) return;
+      if (barrier[idx]) {
+        if (depth + 1 <= LINE_OVERLAP) push(idx, depth + 1);
+      } else if (depth === 0) {
+        push(idx, 0); // 線の中から線でないピクセルへは戻らない（隣の領域に漏れない）
+      }
+    };
+    push(seed, 0);
+    while (head < tail) {
+      const v = queue[head++];
+      const idx = v & 0xfffff;
+      const depth = v >>> 20;
+      const x = idx % w;
+      if (x > 0) step(idx - 1, depth);
+      if (x < w - 1) step(idx + 1, depth);
+      if (idx >= w) step(idx - w, depth);
+      if (idx < w * (h - 1)) step(idx + w, depth);
+    }
+  }
 
   private pushUndo(snap: HTMLCanvasElement) {
     this.undoStack.push(snap);
     if (this.undoStack.length > UNDO_DEPTH) this.undoStack.shift();
   }
 
-  /** points をストロークバッファに不透明で描き、preStroke + モード合成で本 canvas に反映 */
-  private renderStroke() {
+  /** pts をストロークバッファに不透明で描く */
+  private drawPath(pts: { x: number; y: number }[]) {
     const s = this.strokeCtx;
-    s.clearRect(0, 0, this.strokeBuf.width, this.strokeBuf.height);
     s.lineCap = "round";
     s.lineJoin = "round";
     s.lineWidth = this.size;
@@ -120,7 +314,6 @@ export class PaintEngine {
     s.strokeStyle = this.mode === "erase" ? "#000" : this.color;
     s.fillStyle = s.strokeStyle;
 
-    const pts = this.points;
     if (pts.length === 0) return;
     if (pts.length < 3) {
       s.beginPath();
@@ -136,6 +329,22 @@ export class PaintEngine {
       }
       s.stroke();
     }
+  }
+
+  /** points をストロークバッファに描き、preStroke + モード合成で本 canvas に反映 */
+  private renderStroke() {
+    const s = this.strokeCtx;
+    s.clearRect(0, 0, this.strokeBuf.width, this.strokeBuf.height);
+    this.drawPath(this.points);
+
+    // はみだしガード: いまのセグメントを許可領域でクリップし、確定済みセグメントを重ねる。
+    // どちらも不透明の同色なので、重なっても後段のモード合成で継ぎ目は出ない
+    if (this.mask && this.mode !== "erase") {
+      s.globalCompositeOperation = "destination-in";
+      s.drawImage(this.maskCanvas, 0, 0);
+      s.globalCompositeOperation = "source-over";
+    }
+    if (this.hasAccum) s.drawImage(this.strokeAccum, 0, 0);
 
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

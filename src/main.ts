@@ -252,8 +252,80 @@ function showAdultMenu() {
     heading,
     mkBtn("🖊️ 下絵をつくる", () => showTemplateMaker()),
     mkBtn("🗂️ ぬりえのかんり（削除・分類）", () => showManage()),
-    mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor())
+    mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor()),
+    mkBtn("⚙️ ぬりえのせってい", () => showColoringSettings())
   );
+  app.appendChild(overlay);
+}
+
+// ---------------------------------------------------------------- coloring settings
+
+const GUARD_KEY = "dino-coloring:guard-threshold";
+const GUARD_DEFAULT = 36;
+const GUARD_MAX = 200;
+
+/** はみだしガードの閾値 (px)。0 = オフ。未保存・不正値はデフォルト。 */
+function loadGuardThreshold(): number {
+  try {
+    const raw = localStorage.getItem(GUARD_KEY);
+    if (raw === null) return GUARD_DEFAULT;
+    const v = Number(raw);
+    return Number.isFinite(v) ? Math.min(GUARD_MAX, Math.max(0, v)) : GUARD_DEFAULT;
+  } catch {
+    return GUARD_DEFAULT;
+  }
+}
+
+function saveGuardThreshold(v: number) {
+  try {
+    localStorage.setItem(GUARD_KEY, String(v));
+  } catch {
+    // 保存できなくても今回のセッション内では効かせられる
+  }
+}
+
+/** ぬりえのせってい: はみだしガード（線の外に色がはみ出さない）の閾値を調整する。 */
+function showColoringSettings() {
+  const { overlay, box } = makeOverlay("adult-menu");
+  const heading = document.createElement("h1");
+  heading.className = "tm-heading";
+  heading.textContent = "⚙️ ぬりえのせってい";
+
+  const sub = document.createElement("h2");
+  sub.className = "guard-sub";
+  sub.textContent = "はみ出しガード";
+  const desc = document.createElement("p");
+  desc.className = "tm-desc";
+  desc.textContent =
+    "「どのくらいはみ出すとはみ出した線が描かれるか」のレベルです。大きいほどはみだしにくく、0でオフになります。";
+
+  const row = document.createElement("div");
+  row.className = "guard-row";
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = String(GUARD_MAX);
+  slider.step = "1";
+  slider.value = String(loadGuardThreshold());
+  slider.className = "guard-slider";
+  const value = document.createElement("span");
+  value.className = "guard-value";
+  const render = () => {
+    const v = Number(slider.value);
+    value.textContent = v === 0 ? "オフ" : String(v);
+  };
+  render();
+  slider.addEventListener("input", () => {
+    saveGuardThreshold(Number(slider.value));
+    render();
+  });
+  row.append(slider, value);
+
+  const foot = document.createElement("p");
+  foot.className = "tm-desc";
+  foot.textContent = "せっていは この端末に保存され、次にひらいたときも 有効です。";
+
+  box.append(heading, sub, desc, row, foot);
   app.appendChild(overlay);
 }
 
@@ -718,6 +790,7 @@ async function showColoring(art: LineArt, resume: boolean) {
   stageWrap.appendChild(stage);
 
   const engine = new PaintEngine(paintCanvas);
+  engine.setGuardThreshold(loadGuardThreshold());
 
   // ---- 自動保存 (debounce) ----
   let saveTimer: number | null = null;
@@ -754,6 +827,12 @@ async function showColoring(art: LineArt, resume: boolean) {
 
   // 線画と保存済みの塗りをロード
   await drawLineArt(lineartCanvas, art).catch(() => {});
+  // 線画からはみだしガード用の障壁マップを作る（読めない画像などで失敗したらガードなし）
+  try {
+    engine.setLineart(lineartCanvas);
+  } catch {
+    // 例: 外部画像で canvas が汚染されて getImageData できない場合
+  }
   if (resume) {
     const work = await store.getWork(art.id).catch(() => undefined);
     if (work) await engine.loadDataUrl(work.dataUrl).catch(() => {});
