@@ -407,6 +407,33 @@ body {
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
 }
 
+/* ぬりえのせってい: はみだしガードのスライダー */
+.guard-sub {
+  font-size: 20px;
+  color: #3a7a52;
+  margin: 0;
+}
+
+.guard-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.guard-slider {
+  flex: 1;
+  accent-color: #2e9e44;
+  height: 32px;
+}
+
+.guard-value {
+  min-width: 48px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #2c5237;
+}
+
 /* ---------------------------------------------------------------- manage / category editor */
 
 .manage,
