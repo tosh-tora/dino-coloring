@@ -612,6 +612,12 @@ body {
   background: #ffffff;
 }
 
+.swatch.eraser svg {
+  width: 88%;
+  height: 88%;
+  display: block;
+}
+
 .stage-wrap {
   flex: 1;
   min-width: 0;

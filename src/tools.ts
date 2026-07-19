@@ -1,6 +1,7 @@
 // ぬりえ画面のツールバー UI（色・太さ・重ね塗りモード・もどす・ぜんぶ消す）
 import { PaintEngine } from "./paint";
 import { blip } from "./celebrate";
+import { addFavorite, loadFavorites, saveFavorites } from "./favorites";
 
 export const PALETTE = [
   "#e74c3c", // あか
@@ -102,11 +103,17 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
   customInput.value = "#40c4aa";
   customWrap.appendChild(customInput);
   customInput.addEventListener("input", () => {
-    customWrap.style.setProperty("--c", customInput.value);
-    customWrap.classList.add("picked");
     engine.setColor(customInput.value);
     engine.setMode(overlayMode);
     selectSwatch(customWrap);
+  });
+  // ピッカー確定時にお気に入りへ自動登録（input はドラッグ中も連発するので change で拾う）
+  customInput.addEventListener("change", () => {
+    const color = customInput.value.toLowerCase();
+    if (PALETTE.includes(color) || favorites[0] === color) return;
+    favorites = addFavorite(color, favorites);
+    saveFavorites(favorites);
+    renderFavorites();
   });
   swatches.push(customWrap);
   colorsEl.appendChild(customWrap);
@@ -114,7 +121,30 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
   // 消しゴム
   const eraser = document.createElement("button");
   eraser.className = "swatch eraser";
-  eraser.textContent = "🧽";
+  eraser.title = "けしごむ";
+  eraser.innerHTML = `
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <clipPath id="eraser-sleeve">
+          <rect x="18" y="16" width="42" height="33" rx="4" />
+        </clipPath>
+      </defs>
+      <g transform="rotate(-18 32 32)">
+        <rect x="5" y="20" width="20" height="26" rx="6"
+              fill="#f5f2e9" stroke="#1a1a1a" stroke-width="3" />
+        <rect x="18" y="16" width="42" height="33" rx="4" fill="#ffffff" />
+        <g clip-path="url(#eraser-sleeve)">
+          <rect x="18" y="16" width="42" height="6" fill="#2447e0" />
+          <rect x="18" y="37" width="42" height="7.5" fill="#1a1a1a" />
+          <rect x="18" y="44.5" width="42" height="4.5" fill="#2447e0" />
+        </g>
+        <text x="39.5" y="33.5" text-anchor="middle"
+              font-family="'Hiragino Maru Gothic ProN', 'BIZ UDGothic', 'Yu Gothic UI', sans-serif"
+              font-size="10" font-weight="bold" fill="#1a1a1a">けしごむ</text>
+        <rect x="18" y="16" width="42" height="33" rx="4"
+              fill="none" stroke="#1a1a1a" stroke-width="3" />
+      </g>
+    </svg>`;
   eraser.addEventListener("click", () => {
     engine.setMode("erase");
     selectSwatch(eraser);
@@ -122,6 +152,33 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
   });
   swatches.push(eraser);
   colorsEl.appendChild(eraser);
+
+  // ---- お気に入りの色（じぶんの色で選んだ色を自動記憶、じぶんの色と消しゴムの間に表示） ----
+  let favorites = loadFavorites();
+  const favButtons: HTMLButtonElement[] = [];
+  const renderFavorites = () => {
+    for (const btn of favButtons) {
+      const i = swatches.indexOf(btn);
+      if (i !== -1) swatches.splice(i, 1);
+      btn.remove();
+    }
+    favButtons.length = 0;
+    for (const color of favorites) {
+      const btn = document.createElement("button");
+      btn.className = "swatch fav";
+      btn.style.setProperty("--c", color);
+      btn.addEventListener("click", () => {
+        engine.setColor(color);
+        engine.setMode(overlayMode);
+        selectSwatch(btn);
+        blip(520);
+      });
+      favButtons.push(btn);
+      swatches.push(btn);
+      colorsEl.insertBefore(btn, eraser);
+    }
+  };
+  renderFavorites();
 
   // 初期選択: あか
   engine.setColor(PALETTE[0]);
