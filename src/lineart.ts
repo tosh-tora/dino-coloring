@@ -17,6 +17,8 @@ import fishSvg from "../assets/lineart/fish.svg?raw";
 import flowerSvg from "../assets/lineart/flower.svg?raw";
 import rocketSvg from "../assets/lineart/rocket.svg?raw";
 import butterflySvg from "../assets/lineart/butterfly.svg?raw";
+import therizinosaurusSvg from "../assets/lineart/therizinosaurus.svg?raw";
+import argentinosaurusSvg from "../assets/lineart/argentinosaurus.svg?raw";
 import { BUILTIN_CATEGORY } from "./categories";
 
 export const CANVAS_W = 1024;
@@ -53,6 +55,8 @@ const catalogBase: Omit<LineArt, "category">[] = [
   { id: "flower", name: "おはな", svg: flowerSvg },
   { id: "rocket", name: "ロケット", svg: rocketSvg },
   { id: "butterfly", name: "ちょうちょ", svg: butterflySvg },
+  { id: "therizinosaurus", name: "テリジノサウルス", svg: therizinosaurusSvg },
+  { id: "argentinosaurus", name: "アルゼンチノサウルス", svg: argentinosaurusSvg },
 ];
 
 export const catalog: LineArt[] = catalogBase.map((a) => ({
