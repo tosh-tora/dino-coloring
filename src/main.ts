@@ -26,7 +26,14 @@ type ArtOrigin = "builtin" | "shared" | "local";
 /** 3供給元の下絵をまとめて取得し、有効カテゴリー・非表示を算出して返す。 */
 async function collectArts(): Promise<{
   categories: Category[];
-  arts: { art: LineArt; origin: ArtOrigin; category: string | null; hidden: boolean }[];
+  arts: {
+    art: LineArt;
+    origin: ArtOrigin;
+    category: string | null;
+    hidden: boolean;
+    /** 既定（上書き前）の名前。名前をリセットするときに使う */
+    defaultName: string;
+  }[];
 }> {
   const [templates, categories, artMeta, sharedArts] = await Promise.all([
     store.getTemplates().catch(() => []),
@@ -47,7 +54,11 @@ async function collectArts(): Promise<{
     // meta があればその categoryId を優先（null=みぶんるい）。無ければ既定 category。
     let category = meta ? meta.categoryId : art.category ?? null;
     if (category && !validIds.has(category)) category = null; // 削除済みカテゴリーは未分類扱い
-    return { art, origin, category, hidden };
+    // 名前の上書き（あれば）。カタログ等の共有オブジェクトを汚さないよう複製する。
+    const defaultName = art.name;
+    const name = meta?.name ?? defaultName;
+    const outArt = name === defaultName ? art : { ...art, name };
+    return { art: outArt, origin, category, hidden, defaultName };
   };
 
   const arts = [
@@ -340,7 +351,7 @@ async function showManage() {
   const desc = document.createElement("p");
   desc.className = "tm-desc";
   desc.textContent =
-    "分類を変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
+    "なまえや分類を変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
 
   const list = document.createElement("div");
   list.className = "manage-list";
@@ -362,9 +373,24 @@ async function showManage() {
 
     const info = document.createElement("div");
     info.className = "manage-info";
-    const nm = document.createElement("div");
+    const nm = document.createElement("input");
+    nm.type = "text";
     nm.className = "manage-name";
-    nm.textContent = a.art.name;
+    nm.value = a.art.name;
+    nm.title = "なまえを へんしゅう";
+    nm.setAttribute("aria-label", "なまえ");
+    // 空欄／既定名と同じなら上書きを解除して既定名に戻す。
+    nm.addEventListener("change", async () => {
+      const v = nm.value.trim();
+      if (v === "" || v === a.defaultName) {
+        nm.value = a.defaultName;
+        await store.setArtName(a.art.id, null).catch(() => {});
+      } else {
+        nm.value = v;
+        await store.setArtName(a.art.id, v).catch(() => {});
+      }
+      blip(660);
+    });
     const org = document.createElement("div");
     org.className = "manage-origin";
     org.textContent = originLabel[a.origin];

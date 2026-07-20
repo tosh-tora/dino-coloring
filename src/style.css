@@ -484,12 +484,25 @@ body {
 }
 
 .manage-name {
+  width: 100%;
   font-size: 16px;
   font-weight: bold;
   color: #444;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-family: inherit;
+  padding: 6px 8px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: #f6f6f6;
+}
+
+.manage-name:hover {
+  border-color: #e0e0e0;
+}
+
+.manage-name:focus {
+  outline: none;
+  border-color: #7fc9a0;
+  background: #fff;
 }
 
 .manage-origin {

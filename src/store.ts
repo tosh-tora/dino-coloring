@@ -38,6 +38,8 @@ export interface ArtMeta {
   categoryId: string | null;
   /** ライブラリーで非表示にするか（組み込み・共有下絵の「削除」相当） */
   hidden: boolean;
+  /** 名前の上書き。null / undefined は既定の名前を使う */
+  name?: string | null;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -225,6 +227,11 @@ export function setArtCategory(id: string, categoryId: string | null): Promise<v
 
 export function setArtHidden(id: string, hidden: boolean): Promise<void> {
   return upsertArtMeta(id, { hidden });
+}
+
+/** 名前の上書き。null で既定の名前に戻す。 */
+export function setArtName(id: string, name: string | null): Promise<void> {
+  return upsertArtMeta(id, { name });
 }
 
 export async function deleteArtMeta(id: string): Promise<void> {
