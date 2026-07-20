@@ -67,6 +67,12 @@
       "file": "shared-pteranodon.png"
     },
     {
+      "id": "shared-quetzalcoatlus",
+      "name": "ケツァルコアトルス",
+      "category": "cat-dino",
+      "file": "shared-quetzalcoatlus.png"
+    },
+    {
       "id": "shared-stegosaurus-vs-triceratops",
       "name": "ステゴサウルスとトリケラトプスのつなひき",
       "category": "cat-dino",
