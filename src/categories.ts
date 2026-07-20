@@ -29,6 +29,8 @@ export const BUILTIN_CATEGORY: Record<string, string> = {
   pachycephalosaurus: "cat-dino",
   "trex-side": "cat-dino",
   "triceratops-side": "cat-dino",
+  therizinosaurus: "cat-dino",
+  argentinosaurus: "cat-dino",
   mammoth: "cat-extinct",
   titanoboa: "cat-extinct",
   purussaurus: "cat-extinct",
