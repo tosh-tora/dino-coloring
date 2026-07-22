@@ -77,6 +77,30 @@
       "name": "ステゴサウルスとトリケラトプスのつなひき",
       "category": "cat-dino",
       "file": "shared-stegosaurus-vs-triceratops.png"
+    },
+    {
+      "id": "shared-pteranodon-flying",
+      "name": "プテラノドン",
+      "category": "cat-dino",
+      "file": "shared-pteranodon-flying.png"
+    },
+    {
+      "id": "shared-parasaurolophus",
+      "name": "パラサウロロフス",
+      "category": "cat-dino",
+      "file": "shared-parasaurolophus.png"
+    },
+    {
+      "id": "shared-quetzalcoatlus-titled",
+      "name": "ケツァルコアトルス",
+      "category": "cat-dino",
+      "file": "shared-quetzalcoatlus-titled.png"
+    },
+    {
+      "id": "shared-ammonite",
+      "name": "アンモナイト",
+      "category": "cat-extinct",
+      "file": "shared-ammonite.png"
     }
   ]
 }
