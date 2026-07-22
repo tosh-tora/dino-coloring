@@ -101,6 +101,12 @@
       "name": "アンモナイト",
       "category": "cat-extinct",
       "file": "shared-ammonite.png"
+    },
+    {
+      "id": "shared-stegosaurus-realistic",
+      "name": "ステゴサウルス",
+      "category": "cat-dino",
+      "file": "shared-stegosaurus-realistic.png"
     }
   ]
 }
