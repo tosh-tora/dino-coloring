@@ -11,6 +11,9 @@ export interface Category {
 /** 初回起動時にシードする既定カテゴリー（固定 id）。 */
 export const DEFAULT_CATEGORIES: Category[] = [
   { id: "cat-dino", name: "きょうりゅう", order: 0 },
+  // きょうりゅうの直後に出したいが、既存ユーザーの cat-extinct(order 1) と衝突しない
+  // よう小数の order を使う（order は並べ替え用のキーなので整数である必要はない）。
+  { id: "cat-sea", name: "みずのなかのいきもの", order: 0.5 },
   { id: "cat-extinct", name: "ぜつめつどうぶつ", order: 1 },
   { id: "cat-animal", name: "どうぶつ・いきもの", order: 2 },
   { id: "cat-other", name: "そのた", order: 3 },
