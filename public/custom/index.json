@@ -99,7 +99,7 @@
     {
       "id": "shared-ammonite",
       "name": "アンモナイト",
-      "category": "cat-extinct",
+      "category": "cat-sea",
       "file": "shared-ammonite.png"
     },
     {
@@ -137,6 +137,36 @@
       "name": "ステゴサウルス おやこ",
       "category": "cat-dino",
       "file": "shared-stegosaurus-parent.png"
+    },
+    {
+      "id": "shared-ornithomimus",
+      "name": "オルニトミムス",
+      "category": "cat-dino",
+      "file": "shared-ornithomimus.png"
+    },
+    {
+      "id": "shared-ornithomimus-scene",
+      "name": "オルニトミムス",
+      "category": "cat-dino",
+      "file": "shared-ornithomimus-scene.png"
+    },
+    {
+      "id": "shared-mosasaurus",
+      "name": "モササウルス",
+      "category": "cat-sea",
+      "file": "shared-mosasaurus.png"
+    },
+    {
+      "id": "shared-plesiosaurus",
+      "name": "プレシオサウルス",
+      "category": "cat-sea",
+      "file": "shared-plesiosaurus.png"
+    },
+    {
+      "id": "shared-archelon",
+      "name": "アーケロン",
+      "category": "cat-sea",
+      "file": "shared-archelon.png"
     }
   ]
 }

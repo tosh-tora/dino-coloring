@@ -157,19 +157,56 @@ export async function deleteTemplate(id: string): Promise<void> {
 
 // ---------------------------------------------------------------- categories
 
-/** カテゴリー一覧（order 昇順）。空なら既定をシードして返す。 */
+// 既定カテゴリーのうち「一度シード（追加）した」id を localStorage に記録する。
+// これにより、アプリ更新で既定に増えたカテゴリーは既存ユーザーにも一度だけ追加しつつ、
+// 利用者が自分で消した既定カテゴリーを次回起動で復活させてしまうのを防ぐ。
+const SEEDED_CATS_KEY = "dino-coloring:seeded-default-cats";
+
+function loadSeededCatIds(): Set<string> {
+  try {
+    const arr = JSON.parse(localStorage.getItem(SEEDED_CATS_KEY) ?? "[]");
+    return new Set(Array.isArray(arr) ? (arr as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSeededCatIds(ids: Iterable<string>) {
+  try {
+    localStorage.setItem(SEEDED_CATS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // 保存できなくても致命的ではない（次回また追加を試みるだけ）
+  }
+}
+
+/**
+ * カテゴリー一覧（order 昇順）。
+ * 初回は既定を全件シード。以降のアプリ更新で既定に増えたカテゴリーも、まだ一度も
+ * シードしていなければ一度だけ追加する（利用者が消した既定は復活させない）。
+ */
 export async function getCategories(): Promise<Category[]> {
   const db = await openDB();
-  const items = (await reqResult(
+  let items = (await reqResult(
     db.transaction("categories").objectStore("categories").getAll()
   )) as Category[];
-  if (items.length === 0) {
+
+  const firstRun = items.length === 0;
+  const seeded = loadSeededCatIds();
+  const existingIds = new Set(items.map((c) => c.id));
+  // 初回は全件、それ以降は「DB に無く かつ まだシードしていない」既定だけを追加する。
+  const toAdd = DEFAULT_CATEGORIES.filter(
+    (c) => !existingIds.has(c.id) && (firstRun || !seeded.has(c.id))
+  );
+  if (toAdd.length > 0) {
     const tx = db.transaction("categories", "readwrite");
     const os = tx.objectStore("categories");
-    for (const c of DEFAULT_CATEGORIES) os.put(c);
+    for (const c of toAdd) os.put(c);
     await txDone(tx);
-    return [...DEFAULT_CATEGORIES];
+    items = items.concat(toAdd);
   }
+  // 既定カテゴリーはすべて「シード済み」として記録し、以後は復活させない。
+  saveSeededCatIds(new Set([...seeded, ...DEFAULT_CATEGORIES.map((c) => c.id)]));
+
   return items.sort((a, b) => a.order - b.order);
 }
 
