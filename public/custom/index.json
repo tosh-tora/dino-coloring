@@ -167,6 +167,24 @@
       "name": "アーケロン",
       "category": "cat-sea",
       "file": "shared-archelon.png"
+    },
+    {
+      "id": "shared-iguanodon",
+      "name": "イグアノドン",
+      "category": "cat-dino",
+      "file": "shared-iguanodon.png"
+    },
+    {
+      "id": "shared-mammoth",
+      "name": "マンモス",
+      "category": "cat-extinct",
+      "file": "shared-mammoth.png"
+    },
+    {
+      "id": "shared-pachycephalosaurus-battle",
+      "name": "パキケファロサウルス",
+      "category": "cat-dino",
+      "file": "shared-pachycephalosaurus-battle.png"
     }
   ]
 }
