@@ -82,9 +82,10 @@ export const DEFAULT_PROMPT_OPTIONS: PromptOptions = {
 
 const STYLE_LINES: Record<PromptOptions["style"], string> = {
   cute: "- Cute, friendly cartoon style. Simple and cheerful.",
-  normal: "- Clean, friendly illustration style.",
+  normal:
+    "- Clean, friendly illustration style with believable, slightly realistic proportions.",
   realistic:
-    "- Realistic, encyclopedia-style illustration with accurate proportions and anatomy.",
+    "- Realistic, encyclopedia-style illustration with accurate proportions and anatomy, but keep outlines bold and avoid excessive fine linework or texture detail.",
 };
 
 const LINE_LINES: Record<PromptOptions["line"], string> = {
