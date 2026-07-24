@@ -185,6 +185,36 @@
       "name": "パキケファロサウルス",
       "category": "cat-dino",
       "file": "shared-pachycephalosaurus-battle.png"
+    },
+    {
+      "id": "shared-velociraptor",
+      "name": "ヴェロキラプトル",
+      "category": "cat-dino",
+      "file": "shared-velociraptor.png"
+    },
+    {
+      "id": "shared-brachiosaurus",
+      "name": "ブラキオサウルス",
+      "category": "cat-dino",
+      "file": "shared-brachiosaurus.png"
+    },
+    {
+      "id": "shared-megalodon",
+      "name": "メガロドン",
+      "category": "cat-extinct",
+      "file": "shared-megalodon.png"
+    },
+    {
+      "id": "shared-megalodon-simple",
+      "name": "メガロドン",
+      "category": "cat-extinct",
+      "file": "shared-megalodon-simple.png"
+    },
+    {
+      "id": "shared-fukuivenator",
+      "name": "フクイベナートル",
+      "category": "cat-dino",
+      "file": "shared-fukuivenator.png"
     }
   ]
 }
