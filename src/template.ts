@@ -98,8 +98,19 @@ const BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
   none: "- Pure white background with no background elements. The whole subject is fully visible and centered, with generous white space around it.",
   simple:
     "- A simple background with just a few large, easy-to-color elements (e.g. a ground line, a plant, clouds).",
-  full: "- A full scene background filling the frame (sky, terrain, plants) drawn in the same line-art style.",
+  full: "- A full scene background filling the frame (sky, terrain, plants) drawn in the same drawing style.",
 };
+
+/**
+ * 背景ありのときだけ足す指定。
+ *
+ * 「うごかす」（cutout.ts）は線の太さで主役と背景を見分けるので、線幅に差が要る。
+ * 背景が主役に触れること自体は問題ない（細い線はオープニングで消えるため）。むしろ
+ * 触れさせないと地面の線が主役の手前で途切れ、塗る領域が閉じなくなってぬりえとして
+ * 成立しない。困るのは背景が主役の手前を横切る場合だけなので、そこだけ禁じる。
+ */
+const SUBJECT_SEPARATION_LINE =
+  "- Draw the subject with noticeably thicker outlines than the background, so the subject clearly stands out. Background elements pass behind the subject: they stop where they meet the subject's outline and are never drawn across or in front of it.";
 
 const DETAIL_LINES: Record<PromptOptions["detail"], string> = {
   "very-easy":
@@ -129,6 +140,8 @@ export function buildColoringPrompt(
     DETAIL_LINES[opts.detail],
     STYLE_LINES[opts.style],
     BACKGROUND_LINES[opts.background],
+    // 背景が無ければ主役しか居ないので、区別の指定は不要
+    ...(opts.background === "none" ? [] : [SUBJECT_SEPARATION_LINE]),
     "- Landscape orientation, 4:3 aspect ratio.",
     "- No text, no watermark, no border frame.",
   ].join("\n");
