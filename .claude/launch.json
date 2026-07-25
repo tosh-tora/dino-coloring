@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "C:\\Users\\toshi\\projects\\dino-coloring",
       "port": 5173
+    },
+    {
+      "name": "dino-coloring-local",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
     }
   ]
 }
