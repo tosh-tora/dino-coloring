@@ -215,6 +215,12 @@
       "name": "フクイベナートル",
       "category": "cat-dino",
       "file": "shared-fukuivenator.png"
+    },
+    {
+      "id": "shared-andrewsarchus",
+      "name": "アンドリューサルクス",
+      "category": "cat-extinct",
+      "file": "shared-andrewsarchus.png"
     }
   ]
 }
