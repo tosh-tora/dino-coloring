@@ -806,3 +806,12 @@ body {
   font-size: 22px;
   color: #6b5b3e;
 }
+
+.subject-buttons {
+  display: flex;
+  gap: 16px;
+}
+
+.subject-play-btn {
+  background: #ffe9a8;
+}
