@@ -104,12 +104,13 @@ const BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
 /**
  * 背景ありのときだけ足す指定。
  *
- * 「うごかす」（cutout.ts）は線の太さで主役と背景を見分け、輪郭が繋がっているものを
- * 1 つの生き物とみなす。そのため主役と背景が同じ線幅だったり、雲や草が主役の輪郭に
- * 触れていたりすると、背景ごと一緒に動いてしまう。生成の時点で差をつけてもらう。
+ * 「うごかす」（cutout.ts）は線の太さで主役と背景を見分けるので、線幅に差が要る。
+ * 背景が主役に触れること自体は問題ない（細い線はオープニングで消えるため）。むしろ
+ * 触れさせないと地面の線が主役の手前で途切れ、塗る領域が閉じなくなってぬりえとして
+ * 成立しない。困るのは背景が主役の手前を横切る場合だけなので、そこだけ禁じる。
  */
 const SUBJECT_SEPARATION_LINE =
-  "- Draw the subject with noticeably thicker outlines than the background. Keep background elements clearly separated from the subject: they must not overlap, touch, or cross the subject's outline.";
+  "- Draw the subject with noticeably thicker outlines than the background, so the subject clearly stands out. Background elements pass behind the subject: they stop where they meet the subject's outline and are never drawn across or in front of it.";
 
 const DETAIL_LINES: Record<PromptOptions["detail"], string> = {
   "very-easy":
