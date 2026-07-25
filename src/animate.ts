@@ -146,12 +146,19 @@ export function playSubjects(
       }
     }
 
-    setRunning(false);
-
-    playBtn.addEventListener("click", () => {
-      blip(running ? 420 : 780);
-      setRunning(!running);
-    });
+    // 主役を切り出せなかった作品では動かしようがないので、ボタンを出さずに
+    // 「作品を大きく見る画面」として使う
+    if (actors.length === 0) {
+      playBtn.remove();
+      hint.textContent = "";
+      drawStill();
+    } else {
+      setRunning(false);
+      playBtn.addEventListener("click", () => {
+        blip(running ? 420 : 780);
+        setRunning(!running);
+      });
+    }
 
     canvas.addEventListener("pointerdown", (e) => {
       if (!running) return;

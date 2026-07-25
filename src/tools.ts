@@ -61,6 +61,44 @@ export function bindLongPress(el: HTMLElement, ms: number, onFire: () => void) {
   el.addEventListener("pointerleave", cancel);
 }
 
+/** 「捨てる」演出の落下アニメの長さ (ms)。CSS の trash-drop と合わせる */
+const TRASH_DROP_MS = 380;
+
+/**
+ * 長押しで削除する要素に「ゴミ箱に捨てられそう」な見た目を付ける。
+ *
+ * 押している間、中身 (.trash-inner) が縮んで傾き、下から現れるゴミ箱に吸い込まれていく。
+ * 指を離せば元に戻るので、何が起きるのか押しながら確かめられる。押し切ったら落下アニメ
+ * を見せてから onFire を呼ぶ。要素は `<el class="longpress longpress-trash">` の内側に
+ * `.trash-inner` を持つ構造であることが前提。
+ *
+ * 削除ではない長押し（下絵メーカー起動など）には使わないこと。
+ */
+export function bindTrashLongPress(el: HTMLElement, ms: number, onFire: () => void) {
+  el.classList.add("longpress", "longpress-trash");
+
+  // 押し切ったあと指を離すと click も飛ぶ。そのままだと同じ要素の通常タップ（作品を
+  // 動かす・ぬりえを開く）まで動いてしまうので、発火直後の 1 回だけ握りつぶす。
+  let fired = false;
+  el.addEventListener(
+    "click",
+    (e) => {
+      if (!fired) return;
+      fired = false;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    },
+    true
+  );
+
+  bindLongPress(el, ms, () => {
+    fired = true;
+    el.classList.add("trashing");
+    blip(300); // 低い「ポイッ」
+    window.setTimeout(onFire, TRASH_DROP_MS);
+  });
+}
+
 export interface Toolbar {
   colorsEl: HTMLElement;
   toolsEl: HTMLElement;
