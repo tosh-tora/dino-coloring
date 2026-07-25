@@ -1,7 +1,10 @@
 // 完成したぬりえの主役を動かす画面。
 //
-// 背景（＝主役を抜いた完成画像）の上で、切り抜いた生き物が跳ねる。タップするとジャンプ
-// して吠える。左右へ歩かせないのは、下絵がどちら向きに描かれているか判定できず、
+// 最初は完成した絵をそのまま見せ、「うごかす」を押すと、背景（＝主役を抜いた完成画像）の
+// 上で切り抜いた生き物が跳ね始める。動いている間にタップするとジャンプして吠える。
+// 勝手に動き出さないのは、まず自分の作品をそのまま眺められるようにするため。
+//
+// 左右へ歩かせないのは、下絵がどちら向きに描かれているか判定できず、
 // 反転すると後ろ歩きに見えてしまうため。その場で跳ねるぶんには向きの問題が起きない。
 
 import { CANVAS_W, CANVAS_H } from "./lineart";
@@ -43,15 +46,22 @@ export function playSubjects(
     canvas.height = CANVAS_H;
     stage.appendChild(canvas);
 
+    const playBtn = document.createElement("button");
+    playBtn.className = "nav-btn subject-play-btn";
+    playBtn.textContent = "🦕 うごかす！";
+
     const closeBtn = document.createElement("button");
     closeBtn.className = "nav-btn subject-close";
     closeBtn.textContent = "✅ おしまい";
 
+    const buttons = document.createElement("div");
+    buttons.className = "subject-buttons";
+    buttons.append(playBtn, closeBtn);
+
     const hint = document.createElement("p");
     hint.className = "subject-hint";
-    hint.textContent = "きょうりゅうを タップしてみよう！";
 
-    overlay.append(stage, hint, closeBtn);
+    overlay.append(stage, hint, buttons);
     document.body.appendChild(overlay);
 
     const ctx = canvas.getContext("2d")!;
@@ -78,8 +88,9 @@ export function playSubjects(
     }));
 
     let raf = 0;
-    const start = performance.now();
-    let prev = start;
+    let running = false;
+    let start = 0;
+    let prev = 0;
 
     /** その時刻での見た目の位置と拡大率 */
     function poseOf(a: Actor, t: number) {
@@ -113,9 +124,37 @@ export function playSubjects(
       }
       raf = requestAnimationFrame(frame);
     }
-    raf = requestAnimationFrame(frame);
+
+    /** 止まっている間は完成した絵をそのまま見せる（切り抜きの継ぎ目も出ない） */
+    function drawStill() {
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.drawImage(finished, 0, 0, CANVAS_W, CANVAS_H);
+    }
+
+    function setRunning(on: boolean) {
+      running = on;
+      playBtn.textContent = on ? "✋ とめる" : "🦕 うごかす！";
+      hint.textContent = on ? "きょうりゅうを タップしてみよう！" : "ボタンを おすと うごくよ";
+      if (on) {
+        start = performance.now();
+        prev = start;
+        for (const a of actors) a.roarLeft = 0;
+        raf = requestAnimationFrame(frame);
+      } else {
+        cancelAnimationFrame(raf);
+        drawStill();
+      }
+    }
+
+    setRunning(false);
+
+    playBtn.addEventListener("click", () => {
+      blip(running ? 420 : 780);
+      setRunning(!running);
+    });
 
     canvas.addEventListener("pointerdown", (e) => {
+      if (!running) return;
       const rect = canvas.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * CANVAS_W;
       const y = ((e.clientY - rect.top) / rect.height) * CANVAS_H;
