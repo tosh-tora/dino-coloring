@@ -215,6 +215,30 @@
       "name": "フクイベナートル",
       "category": "cat-dino",
       "file": "shared-fukuivenator.png"
+    },
+    {
+      "id": "shared-andrewsarchus",
+      "name": "アンドリューサルクス",
+      "category": "cat-extinct",
+      "file": "shared-andrewsarchus.png"
+    },
+    {
+      "id": "shared-hornet",
+      "name": "オオスズメバチ",
+      "category": "cat-animal",
+      "file": "shared-hornet.png"
+    },
+    {
+      "id": "shared-polar-bear",
+      "name": "ホッキョクグマ",
+      "category": "cat-animal",
+      "file": "shared-polar-bear.png"
+    },
+    {
+      "id": "shared-lion",
+      "name": "ライオン",
+      "category": "cat-animal",
+      "file": "shared-lion.png"
     }
   ]
 }
