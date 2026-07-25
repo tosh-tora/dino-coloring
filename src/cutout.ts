@@ -54,6 +54,11 @@ const MIN_SOLIDITY = 0.25;
  * 元のシルエットの範囲内へ膨らませ直すことで、触れているだけの背景を落とす。
  */
 const SEVER_R = 7;
+/**
+ * 切り分けたあと、最大のかたまりのこの割合以上を主役候補として残す。
+ * 隣り合う 2 体目を拾いつつ、触れているだけの草や石は落とせる値にしてある。
+ */
+const SEVER_KEEP_RATIO = 0.3;
 
 export interface SubjectMask {
   /** 1 = 主役。長さ w*h */
@@ -256,23 +261,31 @@ function fillInterior(
 }
 
 /**
- * 触れているだけの背景をシルエットから切り離す。
- * 開いて（＝細い橋を断ち切って）残った最大のかたまりを胴体とみなし、元のシルエットの
- * 内側に限って膨らませ直す。無制限に再構成すると橋を渡って元に戻ってしまうので、
- * 膨張は切った半径ぶんだけに留める。
+ * シルエットを細いくびれで切り分ける。
+ *
+ * 開く（＝細い橋を断ち切る）と、触れているだけの背景も、隣り合って立っている 2 体目も
+ * 別のかたまりになる。それぞれを元のシルエットの内側に限って膨らませ直して返す。
+ * 無制限に再構成すると橋を渡って元に戻ってしまうので、膨張は切った半径ぶんに留める。
+ *
+ * 返すのは十分な大きさのかたまりだけ。小さいものは草や石なので落とす。呼び出し側が
+ * さらに measure() で主役として妥当かを見る。
  */
-function severThinBridges(sil: Uint8Array, w: number, h: number, r: number): Uint8Array {
+function severThinBridges(sil: Uint8Array, w: number, h: number, r: number): Uint8Array[] {
   const core = erode(sil, w, h, r);
   const comps = connectedComponents(core, w, h);
-  if (comps.length === 0) return sil; // 全部削れるほど細い ＝ 切るものが無い
+  if (comps.length === 0) return [sil]; // 全部削れるほど細い ＝ 切るものが無い
   comps.sort((a, b) => b.pixels.length - a.pixels.length);
 
-  const largest = new Uint8Array(w * h);
-  for (const p of comps[0].pixels) largest[p] = 1;
-
-  const grown = dilate(largest, w, h, r);
-  const out = new Uint8Array(w * h);
-  for (let i = 0; i < out.length; i++) out[i] = grown[i] === 1 && sil[i] === 1 ? 1 : 0;
+  const minCore = comps[0].pixels.length * SEVER_KEEP_RATIO;
+  const out: Uint8Array[] = [];
+  for (const comp of comps) {
+    if (comp.pixels.length < minCore) break;
+    const part = new Uint8Array(w * h);
+    for (const p of comp.pixels) part[p] = 1;
+    const grown = dilate(part, w, h, r);
+    for (let i = 0; i < grown.length; i++) grown[i] = grown[i] === 1 && sil[i] === 1 ? 1 : 0;
+    out.push(grown);
+  }
   return out;
 }
 
@@ -362,10 +375,12 @@ function extractWithRadii(
     const silhouette = new Uint8Array(w * h);
     for (const p of comp.pixels) silhouette[p] = 1;
 
-    const m = measure(severThinBridges(silhouette, w, h, scaleR(SEVER_R, w)), w, h);
-    if (!m) continue;
-    m.confidence = outlineCoverage(m.mask, nearThick, w, h);
-    out.push(m);
+    for (const part of severThinBridges(silhouette, w, h, scaleR(SEVER_R, w))) {
+      const m = measure(part, w, h);
+      if (!m) continue;
+      m.confidence = outlineCoverage(m.mask, nearThick, w, h);
+      out.push(m);
+    }
   }
   out.sort((a, b) => b.area - a.area);
   return out;
