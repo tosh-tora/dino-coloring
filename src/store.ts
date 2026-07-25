@@ -150,10 +150,12 @@ export async function getGallery(): Promise<GalleryItem[]> {
   return items.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-export async function deleteGalleryItem(id: number): Promise<void> {
+export async function deleteGalleryItems(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
   const db = await openDB();
   const tx = db.transaction("gallery", "readwrite");
-  tx.objectStore("gallery").delete(id);
+  const os = tx.objectStore("gallery");
+  for (const id of ids) os.delete(id);
   await txDone(tx);
 }
 

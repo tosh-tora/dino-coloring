@@ -2,7 +2,7 @@
 import "./style.css";
 import { catalog, lineArtSrc, drawLineArt, CANVAS_W, CANVAS_H, LineArt } from "./lineart";
 import { PaintEngine } from "./paint";
-import { buildToolbar, bindLongPress } from "./tools";
+import { buildToolbar, bindLongPress, bindTrashLongPress } from "./tools";
 import * as store from "./store";
 import { celebrate } from "./celebrate";
 import { blip, startBgm, stopBgm, startBrush, stopBrush, makeMuteButton } from "./audio";
@@ -132,7 +132,7 @@ async function showLibrary() {
   const makeCard = (art: LineArt, origin: ArtOrigin) => {
     const card = document.createElement("button");
     const local = origin === "local";
-    card.className = "art-card" + (local ? " custom-card longpress" : "");
+    card.className = "art-card" + (local ? " custom-card" : "");
     const img = document.createElement("img");
     img.src = lineArtSrc(art);
     img.alt = art.name;
@@ -140,7 +140,11 @@ async function showLibrary() {
     const label = document.createElement("span");
     label.className = "art-name";
     label.textContent = art.name;
-    card.append(img, label);
+    // 長押し演出で中身だけを縮めるため、絵と名前は内側にまとめる
+    const inner = document.createElement("div");
+    inner.className = "trash-inner";
+    inner.append(img, label);
+    card.appendChild(inner);
     if (workIds.has(art.id)) {
       const badge = document.createElement("span");
       badge.className = "badge";
@@ -155,9 +159,9 @@ async function showLibrary() {
         showColoring(art, false);
       }
     });
-    // ローカル下絵は長押しで削除（おとな向け操作）
+    // ローカル下絵は長押しで削除（おとな向け操作）。押している間ゴミ箱に吸い込まれる
     if (local) {
-      bindLongPress(card, 1500, async () => {
+      bindTrashLongPress(card, 1500, async () => {
         await store.deleteTemplate(art.id).catch(() => {});
         showLibrary();
       });
@@ -913,9 +917,79 @@ async function showColoring(art: LineArt, resume: boolean) {
 
 // ---------------------------------------------------------------- gallery
 
+/** 升目のすき間 (px)。CSS の .gallery-grid gap と同じ値にすること */
+const GALLERY_GAP = 20;
+/** 升目 1 つの最小幅 (px)。これを下回らない範囲で列数を決める */
+const GALLERY_MIN_W = 260;
+
+/** 「○こ けしても いい？」の確認。けす を選んだら true */
+function confirmDelete(count: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    const box = document.createElement("div");
+    box.className = "chooser confirm";
+
+    const msg = document.createElement("p");
+    msg.className = "confirm-msg";
+    msg.textContent = `${count}こ けしても いい？`;
+
+    const close = (ok: boolean) => {
+      overlay.remove();
+      resolve(ok);
+    };
+
+    const yesBtn = document.createElement("button");
+    yesBtn.className = "chooser-btn";
+    yesBtn.innerHTML = "🗑️<span>けす</span>";
+    yesBtn.addEventListener("click", () => {
+      blip(300);
+      close(true);
+    });
+
+    const noBtn = document.createElement("button");
+    noBtn.className = "chooser-btn";
+    noBtn.innerHTML = "↩️<span>やめる</span>";
+    noBtn.addEventListener("click", () => {
+      blip(700);
+      close(false);
+    });
+
+    const row = document.createElement("div");
+    row.className = "confirm-row";
+    row.append(yesBtn, noBtn);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "chooser-close";
+    closeBtn.textContent = "✖️";
+    closeBtn.addEventListener("click", () => close(false));
+
+    box.append(msg, row, closeBtn);
+    overlay.appendChild(box);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close(false);
+    });
+    app.appendChild(overlay);
+  });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("作品を読み込めませんでした"));
+    img.src = src;
+  });
+}
+
 async function showGallery() {
   stopBgm(); // ギャラリーでは BGM を止める
-  const items = await store.getGallery().catch(() => []);
+  let items = await store.getGallery().catch(() => []);
+  // タップで「うごかす」を再生するため、作品の下絵を引けるようにしておく
+  const artById = new Map<string, LineArt>();
+  for (const a of (await collectArts().catch(() => ({ arts: [] }))).arts) {
+    artById.set(a.art.id, a.art);
+  }
 
   app.innerHTML = "";
   const screen = document.createElement("div");
@@ -932,33 +1006,183 @@ async function showGallery() {
   });
   const title = document.createElement("h1");
   title.textContent = "🖼️ できた さくひん";
-  header.append(backBtn, title, makeMuteButton());
+  const selectBtn = document.createElement("button");
+  selectBtn.className = "nav-btn";
+  header.append(backBtn, title, selectBtn, makeMuteButton());
   screen.appendChild(header);
 
+  const area = document.createElement("div");
+  area.className = "gallery-area";
   const grid = document.createElement("div");
   grid.className = "gallery-grid";
-  if (items.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "gallery-empty";
-    empty.textContent = "まだ さくひんが ないよ 🎨";
-    grid.appendChild(empty);
+  area.appendChild(grid);
+  screen.appendChild(area);
+
+  // ---- フッター: ページ送りと、選択中の操作 ----
+  const footer = document.createElement("div");
+  footer.className = "gallery-footer";
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "◀";
+  const pageLabel = document.createElement("span");
+  pageLabel.className = "gallery-page-label";
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = "▶";
+  const pager = document.createElement("div");
+  pager.className = "gallery-pager";
+  pager.append(prevBtn, pageLabel, nextBtn);
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "nav-btn danger-btn";
+  footer.append(pager, deleteBtn);
+  screen.appendChild(footer);
+
+  app.appendChild(screen);
+
+  let page = 0;
+  let selecting = false;
+  const selected = new Set<number>();
+
+  /** 表示領域から列数と 1 ページの枚数を出す */
+  function layout(): { cols: number; size: number } {
+    const w = grid.clientWidth;
+    const h = grid.clientHeight;
+    const cols = Math.max(1, Math.floor((w + GALLERY_GAP) / (GALLERY_MIN_W + GALLERY_GAP)));
+    const cellW = (w - GALLERY_GAP * (cols - 1)) / cols;
+    const cellH = (cellW * 3) / 4; // 下絵は 4:3
+    const rows = Math.max(1, Math.floor((h + GALLERY_GAP) / (cellH + GALLERY_GAP)));
+    return { cols, size: cols * rows };
   }
-  for (const item of items) {
+
+  function setSelecting(on: boolean) {
+    selecting = on;
+    selected.clear();
+    render();
+  }
+
+  async function removeItems(ids: number[]) {
+    await store.deleteGalleryItems(ids).catch(() => {});
+    items = items.filter((it) => it.id === undefined || !ids.includes(it.id));
+    selected.clear();
+    render();
+  }
+
+  function makeCell(item: store.GalleryItem): HTMLElement {
     const cell = document.createElement("div");
-    cell.className = "gallery-item longpress";
+    cell.className = "gallery-item";
+    const inner = document.createElement("div");
+    inner.className = "trash-inner";
     const img = document.createElement("img");
     img.src = item.dataUrl;
     img.draggable = false;
-    cell.appendChild(img);
-    // 長押しで削除（おとな向け操作）
-    bindLongPress(cell, 1500, async () => {
-      if (item.id !== undefined) await store.deleteGalleryItem(item.id).catch(() => {});
-      cell.remove();
+    inner.appendChild(img);
+    cell.appendChild(inner);
+
+    if (selecting) {
+      cell.classList.add("selectable");
+      const check = document.createElement("span");
+      check.className = "gallery-check";
+      const sel = item.id !== undefined && selected.has(item.id);
+      if (sel) cell.classList.add("selected");
+      check.textContent = sel ? "✓" : "";
+      cell.appendChild(check);
+      cell.addEventListener("click", () => {
+        if (item.id === undefined) return;
+        blip(selected.has(item.id) ? 480 : 720);
+        if (selected.has(item.id)) selected.delete(item.id);
+        else selected.add(item.id);
+        render();
+      });
+      return cell;
+    }
+
+    // 普通モード: タップで「うごかす」、長押しでゴミ箱へ
+    cell.addEventListener("click", () => {
+      blip(660);
+      void playWork(item);
     });
-    grid.appendChild(cell);
+    bindTrashLongPress(cell, 1500, () => {
+      if (item.id !== undefined) void removeItems([item.id]);
+    });
+    return cell;
   }
-  screen.appendChild(grid);
-  app.appendChild(screen);
+
+  /** 作品を「うごかす」画面で開く。主役を切り出せなければ大きい表示になる */
+  async function playWork(item: store.GalleryItem) {
+    const img = await loadImage(item.dataUrl).catch(() => null);
+    if (!img) return;
+    const art = artById.get(item.lineartId);
+    // 下絵が消えている作品は動かしようがないので、そのまま大きく見せる
+    const subjects = art ? await cutOutSubjects(art, img).catch(() => [] as Subject[]) : [];
+    await playSubjects(img, subjects);
+  }
+
+  function render() {
+    const { cols, size } = layout();
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+    const pages = Math.max(1, Math.ceil(items.length / size));
+    page = Math.min(Math.max(0, page), pages - 1);
+
+    grid.innerHTML = "";
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "gallery-empty";
+      empty.textContent = "まだ さくひんが ないよ 🎨";
+      grid.appendChild(empty);
+    }
+    for (const item of items.slice(page * size, page * size + size)) {
+      grid.appendChild(makeCell(item));
+    }
+
+    pageLabel.textContent = `${page + 1} / ${pages}`;
+    prevBtn.disabled = page === 0;
+    nextBtn.disabled = page >= pages - 1;
+    pager.hidden = pages <= 1;
+
+    selectBtn.textContent = selecting ? "↩️ やめる" : "🗑️ えらんで けす";
+    selectBtn.hidden = items.length === 0;
+    deleteBtn.textContent = `🗑️ ${selected.size}こ けす`;
+    deleteBtn.hidden = !selecting;
+    deleteBtn.disabled = selected.size === 0;
+    footer.hidden = pager.hidden && !selecting;
+  }
+
+  prevBtn.addEventListener("click", () => {
+    blip(520);
+    page--;
+    render();
+  });
+  nextBtn.addEventListener("click", () => {
+    blip(620);
+    page++;
+    render();
+  });
+  selectBtn.addEventListener("click", () => {
+    blip(selecting ? 420 : 700);
+    setSelecting(!selecting);
+  });
+  deleteBtn.addEventListener("click", async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    if (!(await confirmDelete(ids.length))) return;
+    await removeItems(ids);
+    setSelecting(false);
+  });
+
+  // 向きの変更などで 1 ページの枚数が変わるため作り直す。window の resize ではなく
+  // グリッド自身を見るのは、画面の作り替えを伴わないレイアウト変化も拾うため。
+  // グリッドの大きさは flex で決まり中身に影響されないので、再描画がループすることはない。
+  const observer = new ResizeObserver(() => {
+    if (!document.body.contains(grid)) {
+      observer.disconnect();
+      return;
+    }
+    render();
+  });
+  observer.observe(grid);
+
+  render();
 }
 
 // ---------------------------------------------------------------- boot
