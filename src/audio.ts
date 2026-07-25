@@ -82,6 +82,43 @@ export function blip(freq = 660) {
   tone(ctx, freq, 0, 0.12, 0.1);
 }
 
+/** 恐竜の鳴き声。低い音を唸らせながら下げる */
+export function roar() {
+  if (muted) return;
+  const ctx = getAudio();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(190, t);
+  osc.frequency.exponentialRampToValueAtTime(70, t + 0.55);
+
+  // 低めに絞って「ガオー」の丸みを出す
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1000, t);
+  filter.frequency.exponentialRampToValueAtTime(300, t + 0.55);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.22, t + 0.06);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+
+  // 唸り（細かい音量の揺れ）
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  lfo.frequency.value = 18;
+  lfoGain.gain.value = 0.06;
+  lfo.connect(lfoGain).connect(gain.gain);
+
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(t);
+  lfo.start(t);
+  osc.stop(t + 0.65);
+  lfo.stop(t + 0.65);
+}
+
 // ---------------------------------------------------------------- BGM
 
 // ゆったりした童謡風メロディ（Hz, 拍数）。0 拍は休符扱い。
