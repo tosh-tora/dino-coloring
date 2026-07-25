@@ -14,6 +14,8 @@ import {
   type PromptOptions,
 } from "./template";
 import { loadSharedArts } from "./shared";
+import { cutOutSubjects, type Subject } from "./subject";
+import { playSubjects } from "./animate";
 import type { Category } from "./categories";
 
 const app = document.getElementById("app")!;
@@ -899,7 +901,12 @@ async function showColoring(art: LineArt, resume: boolean) {
       })
       .catch(() => {});
     window.removeEventListener("pagehide", pagehide);
+    // 切り抜きは数百 ms かかるので、紙吹雪を出している間に裏で走らせる
+    const cutting = cutOutSubjects(art, composite).catch(() => [] as Subject[]);
     await celebrate();
+    // 主役をきれいに切り出せた下絵だけ「うごかす」演出へ進む
+    const subjects = await cutting;
+    if (subjects.length > 0) await playSubjects(composite, subjects);
     showGallery();
   });
 }

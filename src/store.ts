@@ -1,5 +1,6 @@
 // IndexedDB 永続化: 塗りかけ作品 (works, 線画 ID キー) と完成作品 (gallery, 自動採番)、
-// カスタム下絵 (templates)、カテゴリー (categories)、下絵ごとのメタ (artmeta)。
+// カスタム下絵 (templates)、カテゴリー (categories)、下絵ごとのメタ (artmeta)、
+// 主役の切り抜き結果 (cutouts)。
 //
 // 【重要・マイグレーション方針】onupgradeneeded は「無ければ作る」だけ。既存ストア
 // (works/gallery/templates) は絶対に作り直さない・消さない。これによりカスタム下絵は
@@ -8,7 +9,7 @@
 import { DEFAULT_CATEGORIES, type Category } from "./categories";
 
 const DB_NAME = "dino-coloring";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export interface Work {
   lineartId: string;
@@ -29,6 +30,27 @@ export interface CustomTemplate {
   /** 透明化済み下絵画像の data URL */
   imageUrl: string;
   createdAt: number;
+}
+
+/** 下絵から切り出した主役 1 体ぶん。マスクはアルファだけの PNG data URL で持つ。 */
+export interface CutoutSubject {
+  maskUrl: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  confidence: number;
+}
+
+/**
+ * 下絵ごとの主役切り抜き結果のキャッシュ。抽出は数百 ms かかるうえ、下絵が同じなら
+ * 結果も同じなので一度だけ計算して使い回す。version は抽出アルゴリズムの版で、
+ * 上げると古いキャッシュを無視して再計算する。
+ */
+export interface Cutout {
+  id: string;
+  version: number;
+  subjects: CutoutSubject[];
 }
 
 /** 下絵ごとの上書きメタ（組み込み・共有・ローカル共通、id は各下絵の id）。 */
@@ -64,6 +86,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains("artmeta")) {
         db.createObjectStore("artmeta", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("cutouts")) {
+        db.createObjectStore("cutouts", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -147,11 +172,26 @@ export async function getTemplates(): Promise<CustomTemplate[]> {
 
 export async function deleteTemplate(id: string): Promise<void> {
   const db = await openDB();
-  // 下絵と、それに紐づく塗りかけ (works)・メタ (artmeta) をまとめて削除する
-  const tx = db.transaction(["templates", "works", "artmeta"], "readwrite");
+  // 下絵と、それに紐づく塗りかけ (works)・メタ (artmeta)・切り抜き (cutouts) をまとめて削除
+  const tx = db.transaction(["templates", "works", "artmeta", "cutouts"], "readwrite");
   tx.objectStore("templates").delete(id);
   tx.objectStore("works").delete(id);
   tx.objectStore("artmeta").delete(id);
+  tx.objectStore("cutouts").delete(id);
+  await txDone(tx);
+}
+
+// ---------------------------------------------------------------- cutouts
+
+export async function getCutout(id: string): Promise<Cutout | undefined> {
+  const db = await openDB();
+  return reqResult(db.transaction("cutouts").objectStore("cutouts").get(id));
+}
+
+export async function saveCutout(cutout: Cutout): Promise<void> {
+  const db = await openDB();
+  const tx = db.transaction("cutouts", "readwrite");
+  tx.objectStore("cutouts").put(cutout);
   await txDone(tx);
 }
 
