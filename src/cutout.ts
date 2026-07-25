@@ -1,8 +1,13 @@
 // 主役（生き物）の切り出し。
 //
 // 共有下絵は「主役＝太い輪郭線 / 背景（草・シダ・山・雲）＝細い線」という描き分けで
-// 描かれている。そこでモルフォロジー・オープニングで細い線だけを消し、生き残った太線の
-// かたまり＝主役の輪郭とみなし、その内側を塗りつぶして主役のシルエットを得る。
+// 描かれている。そこでモルフォロジー・オープニングで細い線だけを消し、残った太線を
+// 主役の輪郭とみなして内側を塗りつぶし、シルエットを得る。
+//
+// 手前の草に隠れて輪郭が途切れている絵が多いため、塗りつぶす前にクロージングで断片を
+// 繋ぐ。この 2 つの半径の最適値は絵ごとに大きく違うので、組み合わせを総当たりし、
+// 「シルエットの縁がどれだけ太線の上に乗っているか」(outlineCoverage) が最も高いものを
+// 採用する。線幅が主役と背景で変わらない絵は原理的に分離できず、confidence が下がる。
 //
 // 中核 (extractSubjectMasks) は DOM に依存しない純関数にしてある。しきい値の調整を
 // Node 側の検証スクリプトから同じコードで回せるようにするため。
@@ -12,13 +17,21 @@ const INK_ALPHA = 128;
 /**
  * 収縮半径の候補（1024px 幅基準）。半径 R では太さ 2R+1 px 未満の線が消える。
  * 線の太さは絵によってまちまち（背景が細い絵もあれば全体的に太い絵もある）なので、
- * 小さい方から順に試し、最初に「閉じた妥当なシルエット」が取れた半径を採用する。
- * 小さすぎる半径では主役と背景が繋がったままになり、塗りつぶしが画面全体へ漏れて
- * 弾かれるため、この順番で自然に絵ごとの適切な太さが選ばれる。
+ * 小さい方から順に試す。小さすぎる半径では主役と背景が繋がったままになり、塗りつぶしが
+ * 画面全体へ漏れて弾かれるため、この順番で自然に絵ごとの適切な太さが選ばれる。
  */
 const ERODE_RADII = [1, 2, 3];
-/** 輪郭のすき間を塞ぐ半径（1024px 幅基準）。これ以下の切れ目なら塗りが漏れない */
-const CLOSE_R = 5;
+/**
+ * 輪郭のすき間を塞ぐ半径の候補（1024px 幅基準）。手前の草に隠れて輪郭が途切れている絵は
+ * 大きい値でないと閉じないが、大きすぎると背景まで橋渡ししてしまう。これも絵ごとに
+ * 最適値が違うので候補を総当たりし、後述の「輪郭一致率」が最も高い組み合わせを選ぶ。
+ */
+const CLOSE_RADII = [1, 3, 5, 8, 12];
+/**
+ * 採用に必要な輪郭一致率。これを満たす組み合わせが見つかった時点で探索を打ち切る。
+ * 満たすものが無ければ、一致率が最も高かった候補を confidence 付きで返す。
+ */
+const GOOD_COVERAGE = 0.9;
 /** 最大パーツのこの割合以上の面積を持つかたまりも主役として扱う（対決絵の2体め用） */
 const SECONDARY_RATIO = 0.35;
 /** 主役として認めるシルエット面積の範囲（画像全体に対する割合） */
@@ -52,6 +65,12 @@ export interface SubjectMask {
   h: number;
   /** マスクの面積 (px) */
   area: number;
+  /**
+   * 輪郭一致率 0〜1。シルエットの縁が「太い線」の上に乗っている割合。
+   * 主役の輪郭に沿って切り抜けていれば 1 に近く、背景の細い草などを巻き込んで
+   * 切れていると下がる。呼び出し側が演出に使うか諦めるかの判断に使える。
+   */
+  confidence: number;
 }
 
 /** 1024px 幅を基準にした半径を実サイズに合わせる */
@@ -288,52 +307,113 @@ function measure(mask: Uint8Array, w: number, h: number): SubjectMask | null {
   for (let y = 0; y < h; y++) if (mask[y * w + w - 1] === 1) { sides++; break; }
   if (sides > MAX_BORDER_SIDES) return null;
 
-  return { mask, x: minX, y: minY, w: bw, h: bh, area };
+  return { mask, x: minX, y: minY, w: bw, h: bh, area, confidence: 0 };
 }
 
-/** 収縮半径 er を決め打ちして主役候補を取り出す */
-function extractAtRadius(
-  ink: Uint8Array,
+/**
+ * シルエットの縁が太い線の上に乗っている割合を測る。
+ *
+ * 塗りつぶしは必ず何らかの線で止まるが、主役の輪郭に沿って止まったのか、背景の細い草に
+ * 沿って止まったのかはこれで見分けられる。太い線＝主役の輪郭なので、一致率が高いほど
+ * 「生き物のかたちで切り抜けている」ことになる。半径の組み合わせを選ぶ物差しに使う。
+ */
+function outlineCoverage(
+  sil: Uint8Array,
+  nearThick: Uint8Array,
+  w: number,
+  h: number
+): number {
+  const inner = erode(sil, w, h, 1);
+  let edge = 0;
+  let on = 0;
+  for (let i = 0; i < sil.length; i++) {
+    if (sil[i] === 1 && inner[i] === 0) {
+      edge++;
+      if (nearThick[i] === 1) on++;
+    }
+  }
+  return edge === 0 ? 0 : on / edge;
+}
+
+/** 太線マスクとすき間埋め半径を決め打ちして主役候補を取り出す */
+function extractWithRadii(
+  thick: Uint8Array,
+  nearThick: Uint8Array,
   w: number,
   h: number,
-  er: number,
   cr: number
 ): SubjectMask[] {
-  // オープニング（収縮→膨張）で細い線を落とし、太い線だけを元の太さで残す
-  const thick = dilate(erode(ink, w, h, er), w, h, er);
+  // 手前の草などに隠れて輪郭は途切れがちなので、クロージングで近い断片を繋ぐ。
+  // 断片ごとに塗りつぶすと必ず漏れるため、繋いでから一括で内側を塗る。
+  const joined = erode(dilate(thick, w, h, cr), w, h, cr);
 
-  const comps = connectedComponents(thick, w, h);
+  const filled = fillInterior(joined, w, h, cr);
+  if (!filled) return [];
+
+  // 塗り終えたシルエットを個体ごとに分ける（対決絵なら 2 体に分かれる）
+  const comps = connectedComponents(filled, w, h);
   if (comps.length === 0) return [];
   comps.sort((a, b) => b.pixels.length - a.pixels.length);
-  const minOutline = comps[0].pixels.length * SECONDARY_RATIO;
+  const minArea = comps[0].pixels.length * SECONDARY_RATIO;
 
   const out: SubjectMask[] = [];
   for (const comp of comps) {
-    if (comp.pixels.length < minOutline) break;
-    const outline = new Uint8Array(w * h);
-    for (const p of comp.pixels) outline[p] = 1;
+    if (comp.pixels.length < minArea) break;
+    const silhouette = new Uint8Array(w * h);
+    for (const p of comp.pixels) silhouette[p] = 1;
 
-    const silhouette = fillInterior(outline, w, h, cr);
-    if (!silhouette) continue;
     const m = measure(severThinBridges(silhouette, w, h, scaleR(SEVER_R, w)), w, h);
-    if (m) out.push(m);
+    if (!m) continue;
+    m.confidence = outlineCoverage(m.mask, nearThick, w, h);
+    out.push(m);
   }
   out.sort((a, b) => b.area - a.area);
   return out;
 }
 
+/** 面積で重み付けした平均一致率。半径の組み合わせ同士を比べるためのスコア */
+function setScore(subjects: SubjectMask[]): number {
+  let area = 0;
+  let sum = 0;
+  for (const s of subjects) {
+    area += s.area;
+    sum += s.confidence * s.area;
+  }
+  return area === 0 ? 0 : sum / area;
+}
+
 /**
  * 線画のアルファチャンネルから主役のシルエットを取り出す。
  * 面積の大きい順に返す（対決絵などで 2 体見つかることがある）。見つからなければ空配列。
+ *
+ * 収縮半径（背景の細線をどこまで落とすか）とすき間埋め半径（途切れた輪郭をどこまで繋ぐか）
+ * の最適値は絵ごとに違うため、総当たりして輪郭一致率が最も高い組み合わせを採用する。
  */
 export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): SubjectMask[] {
   const ink = new Uint8Array(w * h);
   for (let i = 0; i < ink.length; i++) ink[i] = alpha[i] >= INK_ALPHA ? 1 : 0;
 
-  const cr = scaleR(CLOSE_R, w);
-  for (const r of ERODE_RADII) {
-    const found = extractAtRadius(ink, w, h, scaleR(r, w), cr);
-    if (found.length > 0) return found;
+  let best: SubjectMask[] = [];
+  let bestScore = -1;
+
+  for (const erBase of ERODE_RADII) {
+    const er = scaleR(erBase, w);
+    // オープニング（収縮→膨張）で細い線を落とし、太い線だけを元の太さで残す
+    const thick = dilate(erode(ink, w, h, er), w, h, er);
+    // 一致判定は多少のズレを許す（塗りつぶしは線の内側で止まるため）
+    const nearThick = dilate(thick, w, h, scaleR(3, w));
+
+    for (const crBase of CLOSE_RADII) {
+      const found = extractWithRadii(thick, nearThick, w, h, scaleR(crBase, w));
+      if (found.length === 0) continue;
+      const score = setScore(found);
+      if (score > bestScore) {
+        bestScore = score;
+        best = found;
+      }
+      // 十分きれいに取れたら、これ以上半径を上げて歪ませる必要はない
+      if (score >= GOOD_COVERAGE) return found;
+    }
   }
-  return [];
+  return best;
 }
