@@ -97,7 +97,7 @@ const LINE_LINES: Record<PromptOptions["line"], string> = {
 const BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
   none: "- Pure white background with no background elements. The whole subject is fully visible and centered, with generous white space around it.",
   simple:
-    "- A simple background with just a few large, easy-to-color elements (e.g. a ground line, a plant, clouds).",
+    "- A very sparse background: one ground line plus at most two other large elements in total (for example one plant and one cloud). Nothing more — leave the rest of the background as empty white space.",
   full: "- A full scene background filling the frame (sky, terrain, plants) drawn in the same drawing style.",
 };
 
@@ -105,12 +105,27 @@ const BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
  * 背景ありのときだけ足す指定。
  *
  * 「うごかす」（cutout.ts）は線の太さで主役と背景を見分けるので、線幅に差が要る。
- * 背景が主役に触れること自体は問題ない（細い線はオープニングで消えるため）。むしろ
- * 触れさせないと地面の線が主役の手前で途切れ、塗る領域が閉じなくなってぬりえとして
- * 成立しない。困るのは背景が主役の手前を横切る場合だけなので、そこだけ禁じる。
+ * ただし「際立って太く」のような強い対比語を使うと、生成AIが背景線を細くする方向に
+ * 倒しすぎて背景そのものが塗りにくくなる。かといって「背景も同じくらい太く」と足すと
+ * 指定同士が矛盾して結果が安定しない。そこで「2段階の太さ。主役がやや太いだけ」と
+ * 一貫した言い方にし、どちらも塗れる太さで閉じることを前提に置く。
+ *
+ * すき間の禁止は cc104e6 で確立した判断（背景を主役の手前で止めるとすき間ができ、
+ * 塗る領域が閉じずはみだしガードが効かなくなる）。困るのは手前を横切る場合だけ。
  */
 const SUBJECT_SEPARATION_LINE =
-  "- Draw the subject with noticeably thicker outlines than the background, so the subject clearly stands out. Background elements pass behind the subject: they stop where they meet the subject's outline and are never drawn across or in front of it.";
+  "- Use exactly two line weights: a slightly heavier outline for the subject and a slightly lighter one for the background. Both weights must stay bold, smooth and fully closed — the background lines are only a little lighter, never faint, thin, sketchy or broken. Background elements always touch the subject's outline with no gap between them, and pass behind the subject rather than crossing in front of it.";
+
+/**
+ * 背景ありのときだけ足す、背景そのものの描き方の指定。
+ *
+ * 生成AIは草や茂みを「開いた線の束」（穂先だけの草、下辺の無い茂み）として描きがちで、
+ * これだと領域が地面と繋がってしまい、塗り分けられないし はみだしガードも効かない。
+ * 要素同士を重ねて茂みの塊にされるのも同じ理由で困る。ひとつずつ閉じた形にして、
+ * 離して置いてもらう。
+ */
+const BACKGROUND_REGION_LINE =
+  "- Draw each background element as one simple shape with a fully closed outline that can be filled with a single flat color. No open-ended strokes, no loose tufts of lines, no scribbles, no grass or fur drawn as bare unconnected lines. Space the background elements well apart from each other with plain white gaps between them; never overlap, stack, or cluster them together.";
 
 const DETAIL_LINES: Record<PromptOptions["detail"], string> = {
   "very-easy":
@@ -140,8 +155,10 @@ export function buildColoringPrompt(
     DETAIL_LINES[opts.detail],
     STYLE_LINES[opts.style],
     BACKGROUND_LINES[opts.background],
-    // 背景が無ければ主役しか居ないので、区別の指定は不要
-    ...(opts.background === "none" ? [] : [SUBJECT_SEPARATION_LINE]),
+    // 背景が無ければ主役しか居ないので、背景まわりの指定は不要
+    ...(opts.background === "none"
+      ? []
+      : [SUBJECT_SEPARATION_LINE, BACKGROUND_REGION_LINE]),
     "- Landscape orientation, 4:3 aspect ratio.",
     "- No text, no watermark, no border frame.",
   ].join("\n");

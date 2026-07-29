@@ -234,8 +234,12 @@ function showResumeChooser(art: LineArt) {
 
 // ---------------------------------------------------------------- adult menu
 
-/** 汎用オーバーレイ枠。背景クリックで閉じ、右上に✖️。 */
-function makeOverlay(boxClass: string): { overlay: HTMLDivElement; box: HTMLDivElement } {
+/** 汎用オーバーレイ枠。右上に✖️。既定では背景クリックでも閉じるが、opts で無効化できる。 */
+function makeOverlay(
+  boxClass: string,
+  opts: { closeOnOutsideClick?: boolean } = {}
+): { overlay: HTMLDivElement; box: HTMLDivElement } {
+  const { closeOnOutsideClick = true } = opts;
   const overlay = document.createElement("div");
   overlay.className = "overlay";
   const box = document.createElement("div");
@@ -246,15 +250,17 @@ function makeOverlay(boxClass: string): { overlay: HTMLDivElement; box: HTMLDivE
   closeBtn.addEventListener("click", () => overlay.remove());
   box.appendChild(closeBtn);
   overlay.appendChild(box);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
+  if (closeOnOutsideClick) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+  }
   return { overlay, box };
 }
 
 /** おとなメニュー（ハブ）。下絵づくり／かんり／カテゴリー編集への入口。 */
 function showAdultMenu() {
-  const { overlay, box } = makeOverlay("adult-menu");
+  const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
   heading.textContent = "🔧 おとなメニュー";
@@ -309,7 +315,7 @@ function saveGuardThreshold(v: number) {
 
 /** ぬりえのせってい: はみだしガード（線の外に色がはみ出さない）の閾値を調整する。 */
 function showColoringSettings() {
-  const { overlay, box } = makeOverlay("adult-menu");
+  const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
   heading.textContent = "⚙️ ぬりえのせってい";
@@ -354,7 +360,7 @@ function showColoringSettings() {
 
 /** ぬりえのかんり: 全下絵の削除（ローカル）・非表示（組み込み/共有）・カテゴリー割当。 */
 async function showManage() {
-  const { overlay, box } = makeOverlay("manage");
+  const { overlay, box } = makeOverlay("manage", { closeOnOutsideClick: false });
   const { categories, arts } = await collectArts();
 
   const heading = document.createElement("h1");
@@ -466,18 +472,19 @@ async function showManage() {
   foot.className = "tm-desc";
   foot.textContent = "とじると ライブラリーに はんえいされます。";
 
-  box.append(heading, desc, list, foot);
+  const body = document.createElement("div");
+  body.className = "modal-body";
+  body.append(desc, list, foot);
+
+  box.append(heading, body);
   // 閉じたらライブラリーを更新
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) showLibrary();
-  });
   box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
   app.appendChild(overlay);
 }
 
 /** カテゴリーのへんしゅう: 追加・リネーム・削除。 */
 async function showCategoryEditor() {
-  const { overlay, box } = makeOverlay("cat-editor");
+  const { overlay, box } = makeOverlay("cat-editor", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
   heading.textContent = "🏷️ カテゴリー";
@@ -532,11 +539,12 @@ async function showCategoryEditor() {
   });
   addRow.append(addInput, addBtn);
 
-  box.append(heading, list, addRow);
+  const body = document.createElement("div");
+  body.className = "modal-body";
+  body.append(list, addRow);
+
+  box.append(heading, body);
   box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) showLibrary();
-  });
   app.appendChild(overlay);
   await renderList();
 }
@@ -777,11 +785,12 @@ async function showTemplateMaker() {
 
   sec2.append(h2, desc2, nameInput, catSelect, fileLabel, fileInput, status);
 
-  box.append(closeBtn, heading, sec1, sec2);
+  const body = document.createElement("div");
+  body.className = "template-maker-body";
+  body.append(sec1, sec2);
+
+  box.append(closeBtn, heading, body);
   overlay.appendChild(box);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
   app.appendChild(overlay);
 }
 
