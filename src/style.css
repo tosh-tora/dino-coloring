@@ -212,6 +212,20 @@ body {
   padding: 28px 28px 32px;
   width: min(560px, 92vw);
   max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/*
+ * 閉じるボタンは箱の右上角の外側にはみ出す形で置いている（.chooser-close）。
+ * 箱自身に overflow-y: auto を付けると overflow-x も暗黙に auto 扱いになり、
+ * はみ出した部分が欠けて見える。そこでスクロールは中身専用の内側ラッパーに担わせ、
+ * 箱自体は overflow を持たせない。
+ */
+.template-maker-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -444,6 +458,16 @@ body {
   padding: 28px;
   width: min(620px, 94vw);
   max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 閉じるボタンが箱の外側にはみ出す分、箱自体は overflow させず中身側で吸収する。
+   .template-maker-body 参照。 */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
