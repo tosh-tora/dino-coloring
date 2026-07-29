@@ -77,16 +77,25 @@ const TRASH_HOLD_DELAY_MS = 1000;
  * (.trash-inner) が縮んで傾き、下から現れるゴミ箱に吸い込まれていく演出が始まる。
  * 指を離せば元に戻るので、何が起きるのか押しながら確かめられる。
  *
+ * 縮みきったところで演出をいったん止め、confirm() で本当に消してよいか確認する。
+ * 確認の間は縮みきった見た目のまま（＝消えかけている）を保ち、true が返れば
+ * ゴミ箱へ落ちて消えるアニメのあと onFire を呼ぶ。false ならそのまま元に戻る。
+ *
  * この演出が始まったあとに指を離した場合は、削除もせず・要素の通常タップ（作品を
  * 動かす・ぬりえを開く）も起きない。中途半端に押した結果を確定させないようにするため。
  * 演出が始まる前（＝助走の間）に離した場合は、これまでどおり普通のタップとして扱う。
  *
- * ms は「触れてから消えるまで」の合計時間。演出そのものは ms - TRASH_HOLD_DELAY_MS
- * かけて進む。要素は `<el class="longpress longpress-trash">` の内側に `.trash-inner`
- * を持つ構造であることが前提。削除ではない長押し（下絵メーカー起動など）には
- * 使わないこと。
+ * ms は「触れてから確認ダイアログが出るまで」の合計時間。演出そのものは
+ * ms - TRASH_HOLD_DELAY_MS かけて進む。要素は `<el class="longpress longpress-trash">`
+ * の内側に `.trash-inner` を持つ構造であることが前提。削除ではない長押し
+ * （下絵メーカー起動など）には使わないこと。
  */
-export function bindTrashLongPress(el: HTMLElement, ms: number, onFire: () => void) {
+export function bindTrashLongPress(
+  el: HTMLElement,
+  ms: number,
+  confirm: () => Promise<boolean>,
+  onFire: () => void
+) {
   el.classList.add("longpress", "longpress-trash");
   const motionMs = Math.max(1, ms - TRASH_HOLD_DELAY_MS);
 
@@ -96,6 +105,9 @@ export function bindTrashLongPress(el: HTMLElement, ms: number, onFire: () => vo
   // 演出が始まったあとに離された場合、その離しに続く click を握りつぶして
   // 絵が開かないようにする（発火時も同じ扱いにする）
   let suppressClick = false;
+  // 確認ダイアログの返事を待っている間は、指を離しても演出を巻き戻さない
+  // （ダイアログ自身に「やめる」があるため、ここでの巻き戻しは不要）
+  let confirming = false;
 
   const setP = (p: number) => el.style.setProperty("--p", String(p));
 
@@ -110,6 +122,7 @@ export function bindTrashLongPress(el: HTMLElement, ms: number, onFire: () => vo
   };
 
   const reset = () => {
+    if (confirming) return;
     if (delayTimer !== null) {
       clearTimeout(delayTimer);
       delayTimer = null;
@@ -146,10 +159,24 @@ export function bindTrashLongPress(el: HTMLElement, ms: number, onFire: () => vo
       };
       raf = requestAnimationFrame(tick);
       fireTimer = window.setTimeout(() => {
-        stopMotion();
-        el.classList.add("trashing");
-        blip(300); // 低い「ポイッ」
-        window.setTimeout(onFire, TRASH_DROP_MS);
+        fireTimer = null;
+        cancelAnimationFrame(raf);
+        // ゴミ箱の真上で縮みきった状態のまま止め、本当に消してよいか確認する
+        setP(1);
+        confirming = true;
+        confirm().then((ok) => {
+          confirming = false;
+          if (ok) {
+            el.classList.remove("pressing");
+            el.classList.add("trashing");
+            blip(300); // 低い「ポイッ」
+            window.setTimeout(onFire, TRASH_DROP_MS);
+          } else {
+            blip(700);
+            el.classList.remove("pressing");
+            setP(0);
+          }
+        });
       }, motionMs);
     }, TRASH_HOLD_DELAY_MS);
   });

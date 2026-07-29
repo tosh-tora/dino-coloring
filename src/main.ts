@@ -159,12 +159,18 @@ async function showLibrary() {
         showColoring(art, false);
       }
     });
-    // ローカル下絵は長押しで削除（おとな向け操作）。押している間ゴミ箱に吸い込まれる
+    // ローカル下絵は長押しで削除（おとな向け操作）。押している間ゴミ箱に吸い込まれ、
+    // 縮みきったところで確認ダイアログを出す
     if (local) {
-      bindTrashLongPress(card, 3000, async () => {
-        await store.deleteTemplate(art.id).catch(() => {});
-        showLibrary();
-      });
+      bindTrashLongPress(
+        card,
+        3000,
+        () => confirmDelete(1),
+        async () => {
+          await store.deleteTemplate(art.id).catch(() => {});
+          showLibrary();
+        }
+      );
     }
     return card;
   };
@@ -1105,14 +1111,19 @@ async function showGallery() {
       return cell;
     }
 
-    // 普通モード: タップで「うごかす」、長押しでゴミ箱へ
+    // 普通モード: タップで「うごかす」、長押しでゴミ箱へ→確認ダイアログ
     cell.addEventListener("click", () => {
       blip(660);
       void playWork(item);
     });
-    bindTrashLongPress(cell, 3000, () => {
-      if (item.id !== undefined) void removeItems([item.id]);
-    });
+    bindTrashLongPress(
+      cell,
+      3000,
+      () => confirmDelete(1),
+      () => {
+        if (item.id !== undefined) void removeItems([item.id]);
+      }
+    );
     return cell;
   }
 
