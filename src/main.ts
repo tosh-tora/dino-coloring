@@ -161,7 +161,7 @@ async function showLibrary() {
     });
     // ローカル下絵は長押しで削除（おとな向け操作）。押している間ゴミ箱に吸い込まれる
     if (local) {
-      bindTrashLongPress(card, 1500, async () => {
+      bindTrashLongPress(card, 3000, async () => {
         await store.deleteTemplate(art.id).catch(() => {});
         showLibrary();
       });
@@ -1110,7 +1110,7 @@ async function showGallery() {
       blip(660);
       void playWork(item);
     });
-    bindTrashLongPress(cell, 1500, () => {
+    bindTrashLongPress(cell, 3000, () => {
       if (item.id !== undefined) void removeItems([item.id]);
     });
     return cell;
