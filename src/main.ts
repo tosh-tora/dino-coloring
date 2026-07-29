@@ -1039,7 +1039,16 @@ async function showGallery() {
 
   app.appendChild(screen);
 
-  let page = 0;
+  /**
+   * いま見ている先頭の作品の位置。ページ番号ではなく作品の位置で覚えるのは、
+   * 向きを変えて 1 ページの枚数が変わっても同じあたりの作品に留まるため。
+   * 表示できる範囲へ丸めるのは描画時だけで、この値自体は書き戻さない。一時的に
+   * 全部が 1 ページに収まっても、元の大きさに戻れば元のページに帰ってこられる。
+   */
+  let anchor = 0;
+  /** 直近の描画で使った先頭位置と 1 ページの枚数（送り幅の計算に使う） */
+  let shownFrom = 0;
+  let shownSize = 1;
   let selecting = false;
   const selected = new Set<number>();
 
@@ -1122,7 +1131,10 @@ async function showGallery() {
     grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
     const pages = Math.max(1, Math.ceil(items.length / size));
-    page = Math.min(Math.max(0, page), pages - 1);
+    const page = Math.min(Math.max(0, Math.floor(anchor / size)), pages - 1);
+    const from = page * size;
+    shownFrom = from;
+    shownSize = size;
 
     grid.innerHTML = "";
     if (items.length === 0) {
@@ -1131,7 +1143,7 @@ async function showGallery() {
       empty.textContent = "まだ さくひんが ないよ 🎨";
       grid.appendChild(empty);
     }
-    for (const item of items.slice(page * size, page * size + size)) {
+    for (const item of items.slice(from, from + size)) {
       grid.appendChild(makeCell(item));
     }
 
@@ -1150,12 +1162,12 @@ async function showGallery() {
 
   prevBtn.addEventListener("click", () => {
     blip(520);
-    page--;
+    anchor = Math.max(0, shownFrom - shownSize);
     render();
   });
   nextBtn.addEventListener("click", () => {
     blip(620);
-    page++;
+    anchor = shownFrom + shownSize;
     render();
   });
   selectBtn.addEventListener("click", () => {
