@@ -207,7 +207,8 @@ async function showLibrary() {
   const grid = document.createElement("div");
   grid.className = "library-grid";
 
-  const makeCard = (art: LineArt, origin: ArtOrigin, level: Level) => {
+  // レベルはカードには出さない（絵を見せたいので）。絞り込みチップだけで足りる。
+  const makeCard = (art: LineArt, origin: ArtOrigin) => {
     const card = document.createElement("button");
     const local = origin === "local";
     card.className = "art-card" + (local ? " custom-card" : "");
@@ -218,18 +219,10 @@ async function showLibrary() {
     const label = document.createElement("span");
     label.className = "art-name";
     label.textContent = art.name;
-    // レベルは絵に重ねると邪魔なので、名前の左に小さく置く
-    const levelBadge = document.createElement("span");
-    levelBadge.className = "level-badge";
-    levelBadge.textContent = LEVEL_MARK[level];
-    levelBadge.title = LEVEL_NAME[level];
-    const footer = document.createElement("div");
-    footer.className = "art-footer";
-    footer.append(levelBadge, label);
     // 長押し演出で中身だけを縮めるため、絵と名前は内側にまとめる
     const inner = document.createElement("div");
     inner.className = "trash-inner";
-    inner.append(img, footer);
+    inner.append(img, label);
     card.appendChild(inner);
     if (workIds.has(art.id)) {
       const badge = document.createElement("span");
@@ -277,7 +270,7 @@ async function showLibrary() {
     grid.appendChild(empty);
   }
   for (const a of visible) {
-    grid.appendChild(makeCard(a.art, a.origin, levelOf.get(a.art.id) ?? 2));
+    grid.appendChild(makeCard(a.art, a.origin));
   }
   screen.appendChild(grid);
   app.appendChild(screen);

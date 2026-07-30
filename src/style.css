@@ -132,23 +132,6 @@ body {
   font-size: 30px;
 }
 
-/* 名前の行。左にレベル（★の数）、その右に名前 */
-.art-footer {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-}
-
-/* レベルは絵を隠さないよう名前の横に小さく置く。名前が折り返しても縮まない */
-.level-badge {
-  flex: 0 0 auto;
-  font-size: 14px;
-  letter-spacing: -2px;
-  color: #f0a12e;
-}
-
 /* ---------------------------------------------------------------- chooser overlay */
 
 .overlay {
