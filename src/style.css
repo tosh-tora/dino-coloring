@@ -132,19 +132,21 @@ body {
   font-size: 30px;
 }
 
-/* レベル（★の数）。塗りかけバッジ（右上）とぶつからないよう左上に置く */
+/* 名前の行。左にレベル（★の数）、その右に名前 */
+.art-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* レベルは絵を隠さないよう名前の横に小さく置く。名前が折り返しても縮まない */
 .level-badge {
-  position: absolute;
-  top: 10px;
-  left: 12px;
-  font-size: 18px;
-  letter-spacing: -1px;
+  flex: 0 0 auto;
+  font-size: 14px;
+  letter-spacing: -2px;
   color: #f0a12e;
-  background: #fff7e8;
-  border: 2px solid #f6d9a8;
-  border-radius: 999px;
-  padding: 2px 10px;
-  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------- chooser overlay */

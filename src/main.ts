@@ -218,16 +218,19 @@ async function showLibrary() {
     const label = document.createElement("span");
     label.className = "art-name";
     label.textContent = art.name;
-    // 長押し演出で中身だけを縮めるため、絵と名前は内側にまとめる
-    const inner = document.createElement("div");
-    inner.className = "trash-inner";
-    inner.append(img, label);
-    card.appendChild(inner);
+    // レベルは絵に重ねると邪魔なので、名前の左に小さく置く
     const levelBadge = document.createElement("span");
     levelBadge.className = "level-badge";
     levelBadge.textContent = LEVEL_MARK[level];
     levelBadge.title = LEVEL_NAME[level];
-    card.appendChild(levelBadge);
+    const footer = document.createElement("div");
+    footer.className = "art-footer";
+    footer.append(levelBadge, label);
+    // 長押し演出で中身だけを縮めるため、絵と名前は内側にまとめる
+    const inner = document.createElement("div");
+    inner.className = "trash-inner";
+    inner.append(img, footer);
+    card.appendChild(inner);
     if (workIds.has(art.id)) {
       const badge = document.createElement("span");
       badge.className = "badge";
