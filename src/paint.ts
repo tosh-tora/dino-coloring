@@ -5,6 +5,9 @@ export type PaintMode = "normal" | "mix" | "erase";
 
 const UNDO_DEPTH = 12;
 
+/** まぜまぜ（水彩）で新しい色が占める割合。0.5 = 下の色と半々に混ざる */
+const MIX_RATIO = 0.5;
+
 // ---- はみだしガード ----
 /** この alpha 以上の線画ピクセルを「線」（塗りの障壁）とみなす */
 const LINE_ALPHA = 48;
@@ -17,7 +20,8 @@ export class PaintEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   /** ストローク中の一時バッファ。ストローク全体を毎フレーム描き直すことで
-   *  multiply / 低アルファ時のセグメント継ぎ目の濃さムラを防ぐ。 */
+   *  まぜまぜ / 低アルファ時のセグメント継ぎ目の濃さムラを防ぐ。
+   *  （1 ストロークが自分自身と重なっても、混色は一度しか起きない） */
   private strokeBuf: HTMLCanvasElement;
   private strokeCtx: CanvasRenderingContext2D;
   /** ストローク開始時点のスナップショット（= undo 1 段分） */
@@ -349,9 +353,20 @@ export class PaintEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (this.preStroke) ctx.drawImage(this.preStroke, 0, 0);
-    ctx.globalCompositeOperation =
-      this.mode === "erase" ? "destination-out" : this.mode === "mix" ? "multiply" : "source-over";
-    ctx.drawImage(this.strokeBuf, 0, 0);
+    if (this.mode === "mix") {
+      // 水彩の上塗り: 下の色と新しい色を MIX_RATIO で混ぜる。
+      // 1) 半透明で重ねる = すでに色がある所は加重平均になる（白を塗れば白へ寄る）
+      ctx.globalAlpha = MIX_RATIO;
+      ctx.drawImage(this.strokeBuf, 0, 0);
+      ctx.globalAlpha = 1;
+      // 2) 同じ色を destination-over で裏に敷き、まだ塗っていない所だけ不透明に埋める
+      //    （すでに不透明な所には効かないので 1) の混色はそのまま残る）
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.drawImage(this.strokeBuf, 0, 0);
+    } else {
+      ctx.globalCompositeOperation = this.mode === "erase" ? "destination-out" : "source-over";
+      ctx.drawImage(this.strokeBuf, 0, 0);
+    }
     ctx.globalCompositeOperation = "source-over";
   }
 
