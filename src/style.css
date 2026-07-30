@@ -337,6 +337,10 @@ body {
   gap: 8px;
 }
 
+.tm-option-row[hidden] {
+  display: none;
+}
+
 .tm-option-label {
   flex: 0 0 84px;
   font-size: 15px;
@@ -360,6 +364,45 @@ body {
   color: #fff;
   background: #57b981;
   border-color: #57b981;
+}
+
+/* つくり方（画像から／言葉から）。他の軸のチップとは目的が違う（生成物そのものの分岐）ので、
+ * 見た目も分けた大きめの2択セグメントコントロールにする。 */
+.tm-mode-toggle {
+  display: flex;
+  gap: 6px;
+  background: #eaf1ec;
+  border-radius: 20px;
+  padding: 6px;
+}
+
+.tm-mode-btn {
+  flex: 1 1 0;
+  font-size: 19px;
+  font-weight: bold;
+  color: #3a7a52;
+  background: transparent;
+  border: none;
+  border-radius: 16px;
+  padding: 16px 12px;
+  cursor: pointer;
+}
+
+.tm-mode-btn.active {
+  color: #fff;
+  background: #3a7a52;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+}
+
+.tm-note {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #7a5b12;
+  background: #fff8e6;
+  border: 2px solid #f0cf8a;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 0;
 }
 
 /* ---------------------------------------------------------------- filter bar */
