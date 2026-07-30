@@ -1,7 +1,12 @@
 // ぬりえ画面のツールバー UI（色・太さ・重ね塗りモード・もどす・ぜんぶ消す）
 import { PaintEngine } from "./paint";
 import { blip } from "./celebrate";
-import { addFavorite, loadFavorites, saveFavorites } from "./favorites";
+import {
+  MY_COLOR_DEFAULT,
+  MY_COLOR_SLOTS,
+  loadMyColors,
+  saveMyColors,
+} from "./mycolors";
 
 export const PALETTE = [
   "#e74c3c", // あか
@@ -186,6 +191,12 @@ export function bindTrashLongPress(
   el.addEventListener("pointerleave", reset);
 }
 
+/** カラーピッカーを開く。showPicker 未対応の環境（古い Safari 等）は click() で代用する */
+function openPicker(input: HTMLInputElement) {
+  if (typeof input.showPicker === "function") input.showPicker();
+  else input.click();
+}
+
 export interface Toolbar {
   colorsEl: HTMLElement;
   toolsEl: HTMLElement;
@@ -220,29 +231,79 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
     colorsEl.appendChild(btn);
   }
 
-  // じぶんの色（ネイティブカラーピッカー）
-  const customWrap = document.createElement("button");
-  customWrap.className = "swatch custom";
-  customWrap.title = "じぶんのいろ";
-  const customInput = document.createElement("input");
-  customInput.type = "color";
-  customInput.value = "#40c4aa";
-  customWrap.appendChild(customInput);
-  customInput.addEventListener("input", () => {
-    engine.setColor(customInput.value);
-    engine.setMode(overlayMode);
-    selectSwatch(customWrap);
-  });
-  // ピッカー確定時にお気に入りへ自動登録（input はドラッグ中も連発するので change で拾う）
-  customInput.addEventListener("change", () => {
-    const color = customInput.value.toLowerCase();
-    if (PALETTE.includes(color) || favorites[0] === color) return;
-    favorites = addFavorite(color, favorites);
-    saveFavorites(favorites);
-    renderFavorites();
-  });
-  swatches.push(customWrap);
-  colorsEl.appendChild(customWrap);
+  // ---- じぶんのいろ（6 枠・枠ごとに差し替え） ----
+  // 枠の位置は固定で、勝手に並び替わったり古い色が押し出されたりしない。まだ色を
+  // 作っていない枠は虹色のまま見せ、色が入った枠には「自分で作った色」の目印として
+  // 右下に虹色パレットのバッジを出す。
+  //
+  // 色が入っている枠は 1 タップ目でその色を選ぶだけ（ピッカーは開かない）。選択中の
+  // 枠をもう一度タップするか、空の枠をタップするとピッカーが開き、その枠の色が
+  // 選んだ色に置き換わる。
+  const paletteBadgeSvg = `
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M32 4 C49 4 61 15 61 28 C61 37 54 41 47 42 C42 43 39 45 39 49
+               C39 55 35 60 29 60 C15 60 3 46 3 30 C3 15 15 4 32 4 Z"
+            fill="#ffffff" stroke="#1a1a1a" stroke-width="5" stroke-linejoin="round" />
+      <circle cx="21" cy="19" r="6" fill="#e74c3c" />
+      <circle cx="40" cy="17" r="6" fill="#f7d51d" />
+      <circle cx="50" cy="30" r="6" fill="#2f6fdc" />
+      <circle cx="18" cy="37" r="6" fill="#2e9e44" />
+    </svg>`;
+
+  const myColors = loadMyColors();
+  for (let i = 0; i < MY_COLOR_SLOTS; i++) {
+    const btn = document.createElement("button");
+    btn.className = "swatch mycolor";
+    btn.title = "じぶんのいろ";
+    const badge = document.createElement("span");
+    badge.className = "mycolor-badge";
+    badge.innerHTML = paletteBadgeSvg;
+    btn.appendChild(badge);
+    // ピッカーの表示位置をこの枠の近くに寄せるためだけに置く。タップは枠側で拾いたい
+    // ので pointer-events は CSS で切ってあり、開くのは openPicker() から
+    const input = document.createElement("input");
+    input.type = "color";
+    btn.appendChild(input);
+
+    const render = () => {
+      const color = myColors[i];
+      btn.classList.toggle("filled", color !== null);
+      if (color) btn.style.setProperty("--c", color);
+      else btn.style.removeProperty("--c");
+    };
+    render();
+
+    btn.addEventListener("click", () => {
+      const color = myColors[i];
+      if (color && !btn.classList.contains("selected")) {
+        engine.setColor(color);
+        engine.setMode(overlayMode);
+        selectSwatch(btn);
+        blip(520);
+        return;
+      }
+      selectSwatch(btn);
+      input.value = color ?? MY_COLOR_DEFAULT;
+      openPicker(input);
+      blip(660);
+    });
+
+    // input はドラッグ中も連発するので、見た目と描画色だけ追従させる
+    input.addEventListener("input", () => {
+      myColors[i] = input.value.toLowerCase();
+      render();
+      engine.setColor(input.value);
+      engine.setMode(overlayMode);
+    });
+    // 確定でもキャンセルでも、画面に見えている色をそのまま保存する。iOS のピッカーには
+    // キャンセルが無く選んだ色がそのまま残るので、そちらの挙動に揃えている
+    const persist = () => saveMyColors(myColors);
+    input.addEventListener("change", persist);
+    input.addEventListener("cancel", persist);
+
+    swatches.push(btn);
+    colorsEl.appendChild(btn);
+  }
 
   // 消しゴム
   const eraser = document.createElement("button");
@@ -278,33 +339,6 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
   });
   swatches.push(eraser);
   colorsEl.appendChild(eraser);
-
-  // ---- お気に入りの色（じぶんの色で選んだ色を自動記憶、じぶんの色と消しゴムの間に表示） ----
-  let favorites = loadFavorites();
-  const favButtons: HTMLButtonElement[] = [];
-  const renderFavorites = () => {
-    for (const btn of favButtons) {
-      const i = swatches.indexOf(btn);
-      if (i !== -1) swatches.splice(i, 1);
-      btn.remove();
-    }
-    favButtons.length = 0;
-    for (const color of favorites) {
-      const btn = document.createElement("button");
-      btn.className = "swatch fav";
-      btn.style.setProperty("--c", color);
-      btn.addEventListener("click", () => {
-        engine.setColor(color);
-        engine.setMode(overlayMode);
-        selectSwatch(btn);
-        blip(520);
-      });
-      favButtons.push(btn);
-      swatches.push(btn);
-      colorsEl.insertBefore(btn, eraser);
-    }
-  };
-  renderFavorites();
 
   // 初期選択: あか
   engine.setColor(PALETTE[0]);

@@ -630,19 +630,43 @@ body {
   box-shadow: 0 0 0 4px rgba(44, 82, 55, 0.25);
 }
 
-.swatch.custom {
+/* じぶんのいろの枠。まだ色を作っていない枠は虹色のまま見せる */
+.swatch.mycolor {
   background: var(--c, conic-gradient(#e74c3c, #f7d51d, #2ecc71, #5bc8f5, #9b59b6, #e74c3c));
   position: relative;
-  overflow: hidden;
 }
 
-.swatch.custom input {
+/* タップは枠のボタン側で拾うので、重ねた input には当てない
+   （位置だけ枠に合わせておき、ピッカーはスクリプトから開く） */
+.swatch.mycolor input {
   position: absolute;
   inset: 0;
   opacity: 0;
   width: 100%;
   height: 100%;
-  cursor: pointer;
+  pointer-events: none;
+}
+
+/* 自分で作った色だとわかるように、右下に小さな虹色パレットのアイコンを出す。
+   空の枠は円ぜんたいが虹色なので目印は要らない */
+.swatch.mycolor .mycolor-badge {
+  display: none;
+}
+
+.swatch.mycolor.filled .mycolor-badge {
+  display: block;
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+}
+
+.swatch.mycolor .mycolor-badge svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .swatch.white {
