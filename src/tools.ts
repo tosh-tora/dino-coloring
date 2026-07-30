@@ -16,6 +16,7 @@ export const PALETTE = [
   "#8d5524", // ちゃいろ
   "#95a5a6", // はいいろ
   "#222222", // くろ
+  "#f2f2f2", // しろ（まぜまぜモードで水彩のように色を薄めるのに使う。塗った跡が見えるようごく僅かにグレーへ寄せている）
 ];
 
 export const SIZES = [8, 16, 28, 46];
@@ -206,7 +207,8 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
 
   for (const color of PALETTE) {
     const btn = document.createElement("button");
-    btn.className = "swatch";
+    // 白は背景に溶けてしまうので、枠線を濃くするクラスを付ける
+    btn.className = color === "#f2f2f2" ? "swatch white" : "swatch";
     btn.style.setProperty("--c", color);
     btn.addEventListener("click", () => {
       engine.setColor(color);
@@ -335,21 +337,58 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
   spacer1.className = "tool-spacer";
   toolsEl.appendChild(spacer1);
 
-  // 重ね塗りモードトグル（うわがき 🖍️ / まぜまぜ 🌈）
+  // 重ね塗りモードトグル（うわがき 🖍️ / まぜまぜ = 水彩筆の自作SVG）
+  const modeWrap = document.createElement("div");
+  modeWrap.className = "mode-wrap";
   const modeBtn = document.createElement("button");
   modeBtn.className = "tool-btn mode-btn";
+  const modeLabel = document.createElement("span");
+  modeLabel.className = "mode-label";
+  const brushSvg = `
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="15" cy="45" r="15" fill="#4fb0f0" opacity="0.6" />
+      <circle cx="26" cy="54" r="13" fill="#ff5a72" opacity="0.6" />
+      <g transform="rotate(-45 32 32)">
+        <path d="M4 32 C9 23 18 20.5 27 25 C30.5 26.8 30.5 37.2 27 39 C18 43.5 9 41 4 32 Z"
+              fill="#ef4a63" />
+        <path d="M4 32 C9 23 18 20.5 27 25" fill="none" stroke="#ff8a9a"
+              stroke-width="2" stroke-linecap="round" opacity="0.8" />
+        <rect x="27" y="26" width="9" height="12" rx="2" fill="#eef0f2" />
+        <rect x="27" y="26" width="9" height="3.5" fill="#b7bcc4" />
+        <rect x="27" y="34.5" width="9" height="3.5" fill="#b7bcc4" />
+        <path d="M36 29 C46 27.6 56 27.6 63 29 C64.6 30.6 64.6 33.4 63 35
+                 C56 36.4 46 36.4 36 35 Z" fill="#e8a85e" />
+        <path d="M40 29.5 C48 28.7 56 28.7 60 29.1" fill="none" stroke="#f9dfae"
+              stroke-width="1.6" stroke-linecap="round" opacity="0.9" />
+      </g>
+    </svg>`;
   const renderMode = () => {
-    modeBtn.textContent = overlayMode === "normal" ? "🖍️" : "🌈";
+    if (overlayMode === "normal") {
+      modeBtn.textContent = "🖍️";
+    } else {
+      modeBtn.innerHTML = brushSvg;
+    }
     modeBtn.title = overlayMode === "normal" ? "うわがき" : "まぜまぜ";
   };
   renderMode();
+  // タップした瞬間「えのぐ」「くれよん」と一瞬ポップアップして、いま何色モードに
+  // 切り替わったのかを子どもにもわかるようにする
+  const showModeLabel = () => {
+    modeLabel.textContent = overlayMode === "normal" ? "くれよん" : "えのぐ";
+    modeLabel.classList.remove("show");
+    void modeLabel.offsetWidth; // 連打時にアニメーションを最初から再生させるためのリフロー
+    modeLabel.classList.add("show");
+  };
   modeBtn.addEventListener("click", () => {
     overlayMode = overlayMode === "normal" ? "mix" : "normal";
     if (engine.getMode() !== "erase") engine.setMode(overlayMode);
     renderMode();
+    showModeLabel();
     blip(overlayMode === "mix" ? 740 : 560);
   });
-  toolsEl.appendChild(modeBtn);
+  modeWrap.appendChild(modeBtn);
+  modeWrap.appendChild(modeLabel);
+  toolsEl.appendChild(modeWrap);
 
   // もどす
   const undoBtn = document.createElement("button");
