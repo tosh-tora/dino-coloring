@@ -645,6 +645,10 @@ body {
   cursor: pointer;
 }
 
+.swatch.white {
+  border-color: rgba(0, 0, 0, 0.28);
+}
+
 .swatch.eraser {
   background: #ffffff;
 }
@@ -720,6 +724,60 @@ body {
 .tool-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+.mode-btn svg {
+  width: 68%;
+  height: 68%;
+  display: block;
+}
+
+.mode-wrap {
+  position: relative;
+}
+
+.mode-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: #2c5237;
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 15px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.mode-label.show {
+  animation: mode-label-pop 0.9s ease;
+}
+
+@keyframes mode-label-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1.05);
+  }
+  25% {
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px) scale(0.95);
+  }
 }
 
 .size-dot {
