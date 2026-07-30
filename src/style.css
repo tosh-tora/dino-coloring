@@ -367,9 +367,28 @@ body {
 .filter-bar {
   flex: 0 0 auto;
   display: flex;
-  gap: 10px;
-  overflow-x: auto;
+  align-items: center;
+  gap: 12px;
   padding: 12px 24px 4px;
+}
+
+.filter-group {
+  display: flex;
+  gap: 10px;
+}
+
+/* 分類は数が増えるのでこちらだけ横スクロールし、レベルは右端に残す */
+.filter-cats {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.filter-levels {
+  flex: 0 0 auto;
+  border-left: 2px solid #dcece2;
+  padding-left: 12px;
 }
 
 .filter-chip {
@@ -388,6 +407,21 @@ body {
   color: #fff;
   background: #57b981;
   border-color: #57b981;
+}
+
+/* レベルチップは分類チップと区別できるよう星の色 */
+.filter-chip.level {
+  color: #d98b12;
+  background: #fff7e8;
+  border-color: #f6d9a8;
+  letter-spacing: -1px;
+  padding: 10px 14px;
+}
+
+.filter-chip.level.active {
+  color: #fff;
+  background: #f0a12e;
+  border-color: #f0a12e;
 }
 
 /* ---------------------------------------------------------------- adult menu */
@@ -446,6 +480,32 @@ body {
   font-size: 18px;
   font-weight: bold;
   color: #2c5237;
+}
+
+/* ぬりえのせってい: 見せるレベルのチェックボックス */
+.level-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.level-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: bold;
+  color: #2c5237;
+  background: #f7f7f7;
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.level-check input {
+  width: 22px;
+  height: 22px;
+  accent-color: #f0a12e;
 }
 
 /* ---------------------------------------------------------------- manage / category editor */
@@ -534,6 +594,15 @@ body {
   color: #999;
 }
 
+/* 分類とレベルの select を縦に積む（横幅の狭い端末でも収まるように） */
+.manage-selects {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 40vw;
+}
+
 .manage-select {
   flex: 0 0 auto;
   font-size: 15px;
@@ -541,7 +610,7 @@ body {
   border: 2px solid #cfe6d8;
   border-radius: 10px;
   background: #fff;
-  max-width: 40vw;
+  max-width: 100%;
 }
 
 .manage-actions {

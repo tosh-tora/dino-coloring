@@ -1,15 +1,17 @@
 // IndexedDB 永続化: 塗りかけ作品 (works, 線画 ID キー) と完成作品 (gallery, 自動採番)、
 // カスタム下絵 (templates)、カテゴリー (categories)、下絵ごとのメタ (artmeta)、
-// 主役の切り抜き結果 (cutouts)。
+// 主役の切り抜き結果 (cutouts)、レベルの自動判定結果 (levels)。
 //
 // 【重要・マイグレーション方針】onupgradeneeded は「無ければ作る」だけ。既存ストア
 // (works/gallery/templates) は絶対に作り直さない・消さない。これによりカスタム下絵は
 // アプリのバージョンアップ (DB_VERSION 引き上げ) をまたいでも保持される。
 
 import { DEFAULT_CATEGORIES, type Category } from "./categories";
+// 型だけの import なのでビルド後には消える（level.ts → store.ts の実行時の循環は無い）
+import type { Level } from "./level";
 
 const DB_NAME = "dino-coloring";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export interface Work {
   lineartId: string;
@@ -62,6 +64,18 @@ export interface ArtMeta {
   hidden: boolean;
   /** 名前の上書き。null / undefined は既定の名前を使う */
   name?: string | null;
+  /** レベルの上書き。null / undefined は自動判定（levels ストア）を使う */
+  level?: Level | null;
+}
+
+/**
+ * 下絵ごとのレベル自動判定の結果。判定は下絵だけで決まるので一度計算して使い回す。
+ * version は判定アルゴリズムの版で、上げると古いキャッシュを無視して計算し直す。
+ */
+export interface ArtLevel {
+  id: string;
+  version: number;
+  level: Level;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -89,6 +103,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains("cutouts")) {
         db.createObjectStore("cutouts", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("levels")) {
+        db.createObjectStore("levels", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -174,12 +191,14 @@ export async function getTemplates(): Promise<CustomTemplate[]> {
 
 export async function deleteTemplate(id: string): Promise<void> {
   const db = await openDB();
-  // 下絵と、それに紐づく塗りかけ (works)・メタ (artmeta)・切り抜き (cutouts) をまとめて削除
-  const tx = db.transaction(["templates", "works", "artmeta", "cutouts"], "readwrite");
+  // 下絵と、それに紐づく塗りかけ (works)・メタ (artmeta)・切り抜き (cutouts)・
+  // レベル (levels) をまとめて削除
+  const tx = db.transaction(["templates", "works", "artmeta", "cutouts", "levels"], "readwrite");
   tx.objectStore("templates").delete(id);
   tx.objectStore("works").delete(id);
   tx.objectStore("artmeta").delete(id);
   tx.objectStore("cutouts").delete(id);
+  tx.objectStore("levels").delete(id);
   await txDone(tx);
 }
 
@@ -194,6 +213,26 @@ export async function saveCutout(cutout: Cutout): Promise<void> {
   const db = await openDB();
   const tx = db.transaction("cutouts", "readwrite");
   tx.objectStore("cutouts").put(cutout);
+  await txDone(tx);
+}
+
+// ---------------------------------------------------------------- levels
+
+export async function getArtLevels(): Promise<Map<string, ArtLevel>> {
+  const db = await openDB();
+  const items = (await reqResult(
+    db.transaction("levels").objectStore("levels").getAll()
+  )) as ArtLevel[];
+  return new Map(items.map((l) => [l.id, l]));
+}
+
+/** 判定結果をまとめて保存する（初回は数十件になるので 1 トランザクションで書く）。 */
+export async function saveArtLevels(records: ArtLevel[]): Promise<void> {
+  if (records.length === 0) return;
+  const db = await openDB();
+  const tx = db.transaction("levels", "readwrite");
+  const os = tx.objectStore("levels");
+  for (const r of records) os.put(r);
   await txDone(tx);
 }
 
@@ -311,6 +350,11 @@ export function setArtHidden(id: string, hidden: boolean): Promise<void> {
 /** 名前の上書き。null で既定の名前に戻す。 */
 export function setArtName(id: string, name: string | null): Promise<void> {
   return upsertArtMeta(id, { name });
+}
+
+/** レベルの上書き。null で自動判定に戻す。 */
+export function setArtLevel(id: string, level: Level | null): Promise<void> {
+  return upsertArtMeta(id, { level });
 }
 
 export async function deleteArtMeta(id: string): Promise<void> {
