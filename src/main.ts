@@ -17,25 +17,32 @@ import { loadSharedArts } from "./shared";
 import { cutOutSubjects, type Subject } from "./subject";
 import { playSubjects } from "./animate";
 import type { Category } from "./categories";
+import { getAutoLevels, LEVELS, LEVEL_MARK, LEVEL_NAME, type Level } from "./level";
 
 const app = document.getElementById("app")!;
 
 // ライブラリーの分類フィルター（null = ぜんぶ）。再描画をまたいで保持する。
 let libraryFilter: string | null = null;
+// ライブラリーのレベルフィルター（null = ぜんぶ）。同じく再描画をまたいで保持する。
+let libraryLevel: Level | null = null;
 
 type ArtOrigin = "builtin" | "shared" | "local";
+
+interface ArtEntry {
+  art: LineArt;
+  origin: ArtOrigin;
+  category: string | null;
+  hidden: boolean;
+  /** 大人が手で決めたレベル。null は自動判定を使う */
+  level: Level | null;
+  /** 既定（上書き前）の名前。名前をリセットするときに使う */
+  defaultName: string;
+}
 
 /** 3供給元の下絵をまとめて取得し、有効カテゴリー・非表示を算出して返す。 */
 async function collectArts(): Promise<{
   categories: Category[];
-  arts: {
-    art: LineArt;
-    origin: ArtOrigin;
-    category: string | null;
-    hidden: boolean;
-    /** 既定（上書き前）の名前。名前をリセットするときに使う */
-    defaultName: string;
-  }[];
+  arts: ArtEntry[];
 }> {
   const [templates, categories, artMeta, sharedArts] = await Promise.all([
     store.getTemplates().catch(() => []),
@@ -50,7 +57,7 @@ async function collectArts(): Promise<{
     imageUrl: t.imageUrl,
   }));
 
-  const build = (art: LineArt, origin: ArtOrigin) => {
+  const build = (art: LineArt, origin: ArtOrigin): ArtEntry => {
     const meta = artMeta.get(art.id);
     const hidden = meta?.hidden ?? false;
     // meta があればその categoryId を優先（null=みぶんるい）。無ければ既定 category。
@@ -60,7 +67,7 @@ async function collectArts(): Promise<{
     const defaultName = art.name;
     const name = meta?.name ?? defaultName;
     const outArt = name === defaultName ? art : { ...art, name };
-    return { art: outArt, origin, category, hidden, defaultName };
+    return { art: outArt, origin, category, hidden, level: meta?.level ?? null, defaultName };
   };
 
   const arts = [
@@ -71,14 +78,61 @@ async function collectArts(): Promise<{
   return { categories, arts };
 }
 
+/**
+ * 下絵のレベルを解決する。auto は自動判定（初回だけ計算してキャッシュ）、
+ * effective は「大人の上書き があればそれ、無ければ自動判定」。
+ */
+async function resolveLevels(arts: ArtEntry[]): Promise<{
+  auto: Map<string, Level>;
+  effective: Map<string, Level>;
+}> {
+  const auto = await getAutoLevels(arts.map((a) => a.art)).catch(() => new Map<string, Level>());
+  const effective = new Map<string, Level>();
+  for (const a of arts) {
+    // 自動判定に失敗した下絵は「ふつう」に寄せる（絞り込みから消えないように）
+    effective.set(a.art.id, a.level ?? auto.get(a.art.id) ?? 2);
+  }
+  return { auto, effective };
+}
+
+// ---- 親の強制フィルター（見せるレベル）。この端末に保存する ----
+
+const ALLOWED_LEVELS_KEY = "dino-coloring:allowed-levels";
+
+/** ライブラリーに出してよいレベル。未保存・壊れた値・空はぜんぶ許可。 */
+function loadAllowedLevels(): Set<Level> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ALLOWED_LEVELS_KEY) ?? "");
+    if (Array.isArray(saved)) {
+      const set = new Set(LEVELS.filter((l) => saved.includes(l)));
+      if (set.size > 0) return set;
+    }
+  } catch {
+    // 未保存や壊れた値はぜんぶ許可
+  }
+  return new Set(LEVELS);
+}
+
+function saveAllowedLevels(levels: Set<Level>) {
+  try {
+    localStorage.setItem(ALLOWED_LEVELS_KEY, JSON.stringify(LEVELS.filter((l) => levels.has(l))));
+  } catch {
+    // 保存できなくても今回のセッション内では効かせられる
+  }
+}
+
 // ---------------------------------------------------------------- library
 
 async function showLibrary() {
   const workIds = await store.getWorkIds().catch(() => new Set<string>());
   const { categories, arts } = await collectArts();
+  const { effective: levelOf } = await resolveLevels(arts);
+  const allowedLevels = loadAllowedLevels();
 
   // 削除済みカテゴリーが選択中なら「ぜんぶ」に戻す
   if (libraryFilter && !categories.some((c) => c.id === libraryFilter)) libraryFilter = null;
+  // 親の設定で見せなくなったレベルが選択中なら「ぜんぶ」に戻す
+  if (libraryLevel !== null && !allowedLevels.has(libraryLevel)) libraryLevel = null;
 
   app.innerHTML = "";
   const screen = document.createElement("div");
@@ -108,9 +162,11 @@ async function showLibrary() {
   header.append(title, makeMuteButton(), makerBtn, galleryBtn);
   screen.appendChild(header);
 
-  // 分類チップ（「ぜんぶ」＋各カテゴリー）
+  // 絞り込みバー: 左に分類チップ（多いので横スクロール）、右端にレベルチップを固定する
   const filterBar = document.createElement("div");
   filterBar.className = "filter-bar";
+  const catGroup = document.createElement("div");
+  catGroup.className = "filter-group filter-cats";
   const addChip = (label: string, value: string | null) => {
     const chip = document.createElement("button");
     chip.className = "filter-chip" + (libraryFilter === value ? " active" : "");
@@ -120,16 +176,38 @@ async function showLibrary() {
       blip(560);
       showLibrary();
     });
-    filterBar.appendChild(chip);
+    catGroup.appendChild(chip);
   };
   addChip("ぜんぶ", null);
   for (const c of categories) addChip(c.name, c.id);
+  filterBar.appendChild(catGroup);
+
+  // レベルチップ（★の数）。選んでいるものをもう一度押すと解除＝ぜんぶ。
+  // 親が 1 レベルしか見せていないなら選ぶ余地が無いので出さない。
+  if (allowedLevels.size > 1) {
+    const levelGroup = document.createElement("div");
+    levelGroup.className = "filter-group filter-levels";
+    for (const lv of LEVELS) {
+      if (!allowedLevels.has(lv)) continue;
+      const chip = document.createElement("button");
+      chip.className = "filter-chip level" + (libraryLevel === lv ? " active" : "");
+      chip.textContent = LEVEL_MARK[lv];
+      chip.title = LEVEL_NAME[lv];
+      chip.addEventListener("click", () => {
+        libraryLevel = libraryLevel === lv ? null : lv;
+        blip(libraryLevel === null ? 480 : 600 + lv * 60);
+        showLibrary();
+      });
+      levelGroup.appendChild(chip);
+    }
+    filterBar.append(levelGroup);
+  }
   screen.appendChild(filterBar);
 
   const grid = document.createElement("div");
   grid.className = "library-grid";
 
-  const makeCard = (art: LineArt, origin: ArtOrigin) => {
+  const makeCard = (art: LineArt, origin: ArtOrigin, level: Level) => {
     const card = document.createElement("button");
     const local = origin === "local";
     card.className = "art-card" + (local ? " custom-card" : "");
@@ -145,6 +223,11 @@ async function showLibrary() {
     inner.className = "trash-inner";
     inner.append(img, label);
     card.appendChild(inner);
+    const levelBadge = document.createElement("span");
+    levelBadge.className = "level-badge";
+    levelBadge.textContent = LEVEL_MARK[level];
+    levelBadge.title = LEVEL_NAME[level];
+    card.appendChild(levelBadge);
     if (workIds.has(art.id)) {
       const badge = document.createElement("span");
       badge.className = "badge";
@@ -175,16 +258,24 @@ async function showLibrary() {
     return card;
   };
 
-  const visible = arts.filter(
-    (a) => !a.hidden && (libraryFilter === null || a.category === libraryFilter)
-  );
+  const visible = arts.filter((a) => {
+    const level = levelOf.get(a.art.id) ?? 2;
+    return (
+      !a.hidden &&
+      (libraryFilter === null || a.category === libraryFilter) &&
+      allowedLevels.has(level) &&
+      (libraryLevel === null || level === libraryLevel)
+    );
+  });
   if (visible.length === 0) {
     const empty = document.createElement("div");
     empty.className = "gallery-empty";
     empty.textContent = "ここには まだ ないよ 🦖";
     grid.appendChild(empty);
   }
-  for (const a of visible) grid.appendChild(makeCard(a.art, a.origin));
+  for (const a of visible) {
+    grid.appendChild(makeCard(a.art, a.origin, levelOf.get(a.art.id) ?? 2));
+  }
   screen.appendChild(grid);
   app.appendChild(screen);
 
@@ -280,7 +371,7 @@ function showAdultMenu() {
   box.append(
     heading,
     mkBtn("🖊️ 下絵をつくる", () => showTemplateMaker()),
-    mkBtn("🗂️ ぬりえのかんり（削除・分類）", () => showManage()),
+    mkBtn("🗂️ ぬりえのかんり（削除・分類・レベル）", () => showManage()),
     mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor()),
     mkBtn("⚙️ ぬりえのせってい", () => showColoringSettings())
   );
@@ -313,7 +404,7 @@ function saveGuardThreshold(v: number) {
   }
 }
 
-/** ぬりえのせってい: はみだしガード（線の外に色がはみ出さない）の閾値を調整する。 */
+/** ぬりえのせってい: はみだしガードの閾値と、子どもに見せるレベルを設定する。 */
 function showColoringSettings() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
@@ -325,8 +416,9 @@ function showColoringSettings() {
   sub.textContent = "はみ出しガード";
   const desc = document.createElement("p");
   desc.className = "tm-desc";
+  // 「レベル」はぬりえの難易度を指す語として使うので、ここでは「強さ」と呼ぶ
   desc.textContent =
-    "「どのくらいはみ出すとはみ出した線が描かれるか」のレベルです。大きいほどはみだしにくく、0でオフになります。";
+    "「どのくらいはみ出すとはみ出した線が描かれるか」の強さです。大きいほどはみだしにくく、0でオフになります。";
 
   const row = document.createElement("div");
   row.className = "guard-row";
@@ -350,18 +442,57 @@ function showColoringSettings() {
   });
   row.append(slider, value);
 
+  // ---- 見せるレベル（親の強制フィルター）----
+  const lvSub = document.createElement("h2");
+  lvSub.className = "guard-sub";
+  lvSub.textContent = "見せるレベル";
+  const lvDesc = document.createElement("p");
+  lvDesc.className = "tm-desc";
+  lvDesc.textContent =
+    "チェックしたレベルのぬりえだけを ライブラリーに出します。レベルは絵の複雑さから自動で決まり、「ぬりえのかんり」で変えられます。";
+
+  const allowed = loadAllowedLevels();
+  const lvRow = document.createElement("div");
+  lvRow.className = "level-checks";
+  for (const lv of LEVELS) {
+    const label = document.createElement("label");
+    label.className = "level-check";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = allowed.has(lv);
+    const text = document.createElement("span");
+    text.textContent = `${LEVEL_MARK[lv]} ${LEVEL_NAME[lv]}`;
+    check.addEventListener("change", () => {
+      // 全部off にすると 1枚も出せなくなるので、最後の 1つは外せない
+      if (!check.checked && allowed.size === 1) {
+        check.checked = true;
+        blip(240);
+        return;
+      }
+      if (check.checked) allowed.add(lv);
+      else allowed.delete(lv);
+      saveAllowedLevels(allowed);
+      blip(check.checked ? 620 : 380);
+    });
+    label.append(check, text);
+    lvRow.appendChild(label);
+  }
+
   const foot = document.createElement("p");
   foot.className = "tm-desc";
   foot.textContent = "せっていは この端末に保存され、次にひらいたときも 有効です。";
 
-  box.append(heading, sub, desc, row, foot);
+  box.append(heading, sub, desc, row, lvSub, lvDesc, lvRow, foot);
+  // 閉じたらライブラリーを更新（見せるレベルの変更を反映する）
+  box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
   app.appendChild(overlay);
 }
 
-/** ぬりえのかんり: 全下絵の削除（ローカル）・非表示（組み込み/共有）・カテゴリー割当。 */
+/** ぬりえのかんり: 全下絵の削除（ローカル）・非表示（組み込み/共有）・カテゴリー/レベル割当。 */
 async function showManage() {
   const { overlay, box } = makeOverlay("manage", { closeOnOutsideClick: false });
   const { categories, arts } = await collectArts();
+  const { auto: autoLevels } = await resolveLevels(arts);
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
@@ -369,7 +500,7 @@ async function showManage() {
   const desc = document.createElement("p");
   desc.className = "tm-desc";
   desc.textContent =
-    "なまえや分類を変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
+    "なまえ・分類・レベルを変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
 
   const list = document.createElement("div");
   list.className = "manage-list";
@@ -432,6 +563,31 @@ async function showManage() {
       await store.setArtCategory(a.art.id, sel.value || null).catch(() => {});
     });
 
+    // レベル select（空 = 自動判定にまかせる）
+    const lvSel = document.createElement("select");
+    lvSel.className = "manage-select";
+    lvSel.title = "レベル";
+    const autoLevel = autoLevels.get(a.art.id) ?? 2;
+    const autoOpt = document.createElement("option");
+    autoOpt.value = "";
+    autoOpt.textContent = `じどう（${LEVEL_MARK[autoLevel]}）`;
+    lvSel.appendChild(autoOpt);
+    for (const lv of LEVELS) {
+      const opt = document.createElement("option");
+      opt.value = String(lv);
+      opt.textContent = `${LEVEL_MARK[lv]} ${LEVEL_NAME[lv]}`;
+      lvSel.appendChild(opt);
+    }
+    lvSel.value = a.level === null ? "" : String(a.level);
+    lvSel.addEventListener("change", async () => {
+      const lv = lvSel.value === "" ? null : (Number(lvSel.value) as Level);
+      await store.setArtLevel(a.art.id, lv).catch(() => {});
+    });
+
+    const selects = document.createElement("div");
+    selects.className = "manage-selects";
+    selects.append(sel, lvSel);
+
     // 操作ボタン
     const actions = document.createElement("div");
     actions.className = "manage-actions";
@@ -464,7 +620,7 @@ async function showManage() {
       actions.appendChild(toggle);
     }
 
-    row.append(img, info, sel, actions);
+    row.append(img, info, selects, actions);
     list.appendChild(row);
   }
 
