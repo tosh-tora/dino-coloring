@@ -705,12 +705,34 @@ async function showCategoryEditor() {
 
 const PROMPT_OPTIONS_KEY = "dino-coloring:prompt-options";
 
-/** プロンプトオプションの各軸のUIラベルと選択肢（チップの表示順） */
+/** つくり方（text/image）専用の定義。他の軸とは見た目を分けて① 直下に大きく置くため、
+ * チップ行を並べる PROMPT_OPTION_DEFS には含めない（読み込み・保存の検証にだけ使う）。 */
+const MODE_DEF = {
+  key: "mode" as const,
+  choices: [
+    { value: "image", label: "画像から" },
+    { value: "text", label: "言葉から" },
+  ],
+};
+
+/** プロンプトオプションの各軸のUIラベルと選択肢（チップの表示順）。
+ * modes を省略すると両モードで表示、指定するとそのモードのときだけ表示する。 */
 const PROMPT_OPTION_DEFS: {
   key: keyof PromptOptions;
   label: string;
   choices: { value: string; label: string }[];
+  modes?: PromptOptions["mode"][];
 }[] = [
+  {
+    key: "fidelity",
+    label: "忠実さ",
+    choices: [
+      { value: "faithful", label: "そのまま" },
+      { value: "balanced", label: "すこし単純" },
+      { value: "simple", label: "しっかり単純" },
+    ],
+    modes: ["image"],
+  },
   {
     key: "style",
     label: "画風",
@@ -719,6 +741,7 @@ const PROMPT_OPTION_DEFS: {
       { value: "normal", label: "ふつう" },
       { value: "realistic", label: "リアル" },
     ],
+    modes: ["text"],
   },
   {
     key: "line",
@@ -746,6 +769,7 @@ const PROMPT_OPTION_DEFS: {
       { value: "easy", label: "かんたん" },
       { value: "normal", label: "ふつう" },
     ],
+    modes: ["text"],
   },
 ];
 
@@ -754,7 +778,7 @@ function loadPromptOptions(): PromptOptions {
   const opts: Record<string, string> = { ...DEFAULT_PROMPT_OPTIONS };
   try {
     const saved = JSON.parse(localStorage.getItem(PROMPT_OPTIONS_KEY) ?? "");
-    for (const def of PROMPT_OPTION_DEFS) {
+    for (const def of [MODE_DEF, ...PROMPT_OPTION_DEFS]) {
       const v = saved?.[def.key];
       if (def.choices.some((c) => c.value === v)) opts[def.key] = v;
     }
@@ -794,20 +818,62 @@ async function showTemplateMaker() {
   sec1.className = "tm-section";
   const h1 = document.createElement("h2");
   h1.textContent = "① プロンプトを作る";
+
+  const promptOpts = loadPromptOptions();
+
+  // つくり方（画像から／言葉から）は他の軸と違って生成物そのものを切り替える大きな分岐なので、
+  // 小さなチップとは見た目を分けた大きめのトグルにして見出し直下に置く。
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "tm-mode-toggle";
+  const modeButtons: HTMLButtonElement[] = [];
+  for (const choice of MODE_DEF.choices) {
+    const modeBtn = document.createElement("button");
+    modeBtn.type = "button";
+    modeBtn.className = "tm-mode-btn";
+    modeBtn.textContent = choice.label;
+    modeBtn.classList.toggle("active", promptOpts.mode === choice.value);
+    modeBtn.addEventListener("click", () => {
+      promptOpts.mode = choice.value as PromptOptions["mode"];
+      for (const b of modeButtons) b.classList.toggle("active", b === modeBtn);
+      savePromptOptions(promptOpts);
+      blip(600);
+      refreshMode();
+    });
+    modeButtons.push(modeBtn);
+    modeToggle.appendChild(modeBtn);
+  }
+
   const desc1 = document.createElement("p");
   desc1.className = "tm-desc";
-  desc1.textContent =
-    "描きたいものを日本語で入力して「作る」を押すと、画像生成AI（ChatGPT など）に貼り付ける英語のプロンプトが生成され、クリップボードにコピーされます。";
+
+  const DESC_BY_MODE: Record<PromptOptions["mode"], string> = {
+    text: "描きたいものを日本語で入力して「作る」を押すと、画像生成AI（ChatGPT など）に貼り付ける英語のプロンプトが生成され、クリップボードにコピーされます。",
+    image:
+      "手持ちの写真やイラストをぬりえにしたいときのモードです。画像の説明（任意）を入れて「作る」を押すとプロンプトができるので、ChatGPT などに元の画像を添付し、プロンプトを貼り付けて送ってください。",
+  };
+  const PLACEHOLDER_BY_MODE: Record<PromptOptions["mode"], string> = {
+    text: "例: トリケラトプスとティラノサウルスのたたかい",
+    image: "例: いえで飼っているねこ（にんい）",
+  };
 
   const input = document.createElement("input");
   input.type = "text";
   input.className = "tm-input";
-  input.placeholder = "例: トリケラトプスとティラノサウルスのたたかい";
+
+  // 作り方の手順案内。モードを問わず出す。生成後、画像モードだけ「元画像を添付して」を強調する。
+  const note = document.createElement("p");
+  note.className = "tm-note";
+  const NOTE_GUIDE_BY_MODE: Record<PromptOptions["mode"], string> = {
+    text: "手順: ① プロンプトを作る → ChatGPT などにこのプロンプトを貼り付けて送る → できあがった白背景の線画を②でアップロード",
+    image:
+      "手順: ① プロンプトを作る → ChatGPT などに元の画像を添付して、このプロンプトを貼り付ける → できあがった白背景の線画を②でアップロード",
+  };
+  const NOTE_REMINDER = "⚠️ 元の画像を添付してから、このプロンプトを貼り付けてください";
 
   // 画像の感じの指定チップ（各軸で排他選択）。選択は localStorage に保存して次回復元。
-  const promptOpts = loadPromptOptions();
   const optionsBox = document.createElement("div");
   optionsBox.className = "tm-options";
+  const rows: { row: HTMLDivElement; modes?: PromptOptions["mode"][] }[] = [];
   for (const def of PROMPT_OPTION_DEFS) {
     const row = document.createElement("div");
     row.className = "tm-option-row";
@@ -832,6 +898,7 @@ async function showTemplateMaker() {
       row.appendChild(chip);
     }
     optionsBox.appendChild(row);
+    rows.push({ row, modes: def.modes });
   }
 
   const makeBtn = document.createElement("button");
@@ -848,6 +915,19 @@ async function showTemplateMaker() {
   toast.className = "tm-toast";
   toast.hidden = true;
 
+  /** モードに応じて、説明文・プレースホルダー・チップ行の表示・案内ノートを切り替える。
+   * 前のモードで作った出力はモードが変わったら混乱のもとなので消す。 */
+  function refreshMode() {
+    const mode = promptOpts.mode;
+    desc1.textContent = DESC_BY_MODE[mode];
+    input.placeholder = PLACEHOLDER_BY_MODE[mode];
+    for (const { row, modes } of rows) row.hidden = modes != null && !modes.includes(mode);
+    note.textContent = NOTE_GUIDE_BY_MODE[mode];
+    output.hidden = true;
+    toast.hidden = true;
+  }
+  refreshMode();
+
   makeBtn.addEventListener("click", async () => {
     blip(680);
     const prompt = buildColoringPrompt(input.value, promptOpts);
@@ -856,9 +936,10 @@ async function showTemplateMaker() {
     const ok = await copyToClipboard(prompt);
     toast.textContent = ok ? "コピーしました ✅" : "コピーできませんでした。選択してコピーしてください";
     toast.hidden = false;
+    if (promptOpts.mode === "image") note.textContent = NOTE_REMINDER;
   });
 
-  sec1.append(h1, desc1, input, optionsBox, makeBtn, output, toast);
+  sec1.append(h1, modeToggle, desc1, input, optionsBox, note, makeBtn, output, toast);
 
   // ---- セクション2: 画像をアップロード ----
   const sec2 = document.createElement("section");

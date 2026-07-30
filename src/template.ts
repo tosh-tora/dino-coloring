@@ -64,20 +64,33 @@ export async function processUploadedImage(file: File): Promise<string> {
   return imageToTransparentDataUrl(img);
 }
 
-/** プロンプトの画風・線・背景・細かさの指定。 */
+/**
+ * プロンプトの作り方。
+ * - text: 日本語の主題テキストから線画を生成させる
+ * - image: 手持ちの画像を添付して線画化させる（ツール内での輪郭抽出は品質的に難しいため
+ *   プロンプト方式にしている）
+ */
+export type PromptMode = "text" | "image";
+
+/** プロンプトの作り方・画風・線・背景・細かさ・忠実さの指定。 */
 export interface PromptOptions {
+  mode: PromptMode;
   style: "cute" | "normal" | "realistic";
   line: "thick" | "normal" | "thin";
   background: "none" | "simple" | "full";
   detail: "very-easy" | "easy" | "normal";
+  /** image モードのみ: 元画像への忠実さ（faithful=そのまま 〜 simple=しっかり単純） */
+  fidelity: "faithful" | "balanced" | "simple";
 }
 
-/** 現行テンプレートと同等の既定値（かわいい・ふとい・背景なし・かんたん）。 */
+/** 現行テンプレートと同等の既定値（ことばから・かわいい・ふとい・背景なし・かんたん）。 */
 export const DEFAULT_PROMPT_OPTIONS: PromptOptions = {
+  mode: "text",
   style: "cute",
   line: "thick",
   background: "none",
   detail: "easy",
+  fidelity: "balanced",
 };
 
 const STYLE_LINES: Record<PromptOptions["style"], string> = {
@@ -135,15 +148,31 @@ const DETAIL_LINES: Record<PromptOptions["detail"], string> = {
     "- Moderate detail with clearly separated regions, still easy for children to color inside.",
 };
 
+/** image モードでの背景の扱い。文面は「元画像の背景をどう扱うか」の指示なので、
+ * テキストモード用の BACKGROUND_LINES（何もないところから描かせる指示）とは別に持つ。 */
+const IMAGE_BACKGROUND_LINES: Record<PromptOptions["background"], string> = {
+  none: "- Ignore the background of the attached photo entirely. Draw only the main subject on a pure white background, fully visible and centered, with generous white space around it.",
+  simple:
+    "- Keep only two or three of the largest, most recognizable background elements from the attached photo (for example one piece of furniture, one tree). Redraw each as one simple closed shape. Leave everything else as empty white space.",
+  full: "- Keep the background from the attached photo, but simplify it into a small number of large, clearly separated regions drawn in the same line-art style as the subject.",
+};
+
+/** image モードでの、元画像への忠実さ（3段階）。 */
+const FIDELITY_LINES: Record<PromptOptions["fidelity"], string> = {
+  faithful:
+    "- Stay as faithful as possible to the attached photo: keep the same composition, camera angle, pose, and proportions of everything shown. Do not invent a different pose or redesign the subject. You may still drop details that are too small to color, such as individual hairs, scales, wrinkles, shadows, or surface texture.",
+  balanced:
+    "- Keep the composition, pose, and clearly recognizable features from the attached photo, but simplify small details into larger, simple shapes that are easy to color.",
+  simple:
+    "- Use the attached photo only as loose reference for what the subject is and roughly how it is posed. Feel free to redraw it as a simple coloring-book design with few lines and large regions, rather than reproducing the photo closely.",
+};
+
 /**
- * 日本語の主題から、外部の画像生成AIに貼り付けるための英語塗り絵線画プロンプトを作る。
+ * 日本語の主題から、外部の画像生成AIに貼り付けるための英語塗り絵線画プロンプトを作る（text モード）。
  * このアプリはバックエンド無しのため主題の英訳はせず、主題を Subject にそのまま埋め込む
  * （近年の画像生成AIは日本語主題も解釈できる）。
  */
-export function buildColoringPrompt(
-  theme: string,
-  opts: PromptOptions = DEFAULT_PROMPT_OPTIONS,
-): string {
+function buildTextPrompt(theme: string, opts: PromptOptions): string {
   const subject = theme.trim() || "a cute dinosaur";
   return [
     "Black-and-white coloring book line art for young children.",
@@ -162,6 +191,42 @@ export function buildColoringPrompt(
     "- Landscape orientation, 4:3 aspect ratio.",
     "- No text, no watermark, no border frame.",
   ].join("\n");
+}
+
+/**
+ * 添付した手持ち画像を線画化させるための英語プロンプトを作る（image モード）。
+ * 呼び出し側は生成した画像生成AIに、このプロンプトと一緒に元画像を添付するよう案内すること。
+ */
+function buildImagePrompt(theme: string, opts: PromptOptions): string {
+  const description = theme.trim();
+  return [
+    "Convert the attached image into black-and-white coloring book line art for young children.",
+    "The attached image is the source — do not invent a different subject.",
+    ...(description ? [`The attached image shows: ${description}`] : []),
+    "",
+    "Style requirements:",
+    LINE_LINES[opts.line],
+    "- Outlines only. No shading, no gray tones, no color, no fills, no textures.",
+    FIDELITY_LINES[opts.fidelity],
+    IMAGE_BACKGROUND_LINES[opts.background],
+    // 背景が無ければ主役しか居ないので、背景まわりの指定は不要
+    ...(opts.background === "none"
+      ? []
+      : [SUBJECT_SEPARATION_LINE, BACKGROUND_REGION_LINE]),
+    "- Landscape orientation, 4:3 aspect ratio. Do not crop the subject — add white space or background as needed to fit this ratio.",
+    "- No text, no watermark, no border frame.",
+  ].join("\n");
+}
+
+/**
+ * プロンプトを作る。opts.mode に応じて、日本語の主題テキストから作る（text）か、
+ * 添付画像を線画化させる指示を作る（image）かを切り替える。
+ */
+export function buildColoringPrompt(
+  theme: string,
+  opts: PromptOptions = DEFAULT_PROMPT_OPTIONS,
+): string {
+  return opts.mode === "image" ? buildImagePrompt(theme, opts) : buildTextPrompt(theme, opts);
 }
 
 /** テキストをクリップボードにコピー。失敗時は execCommand にフォールバック。 */
