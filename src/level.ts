@@ -1,10 +1,17 @@
 // ぬりえのレベル（1=かんたん / 2=ふつう / 3=むずかしい）の自動判定。
 //
-// 判定は下絵を 256x192 に縮小したアルファ（＝線の濃さ）だけで行う軽い方法:
-//   - 塗る領域の数: 線でない画素の連結成分の数（小さすぎるものは数えない）
-//   - 線の密度    : 線の画素の割合
-// 領域が多いほど塗り分けが大変で、細い線が詰まっているほど（＝縮小しても密度が高い）
-// はみ出さずに塗るのが難しい。ふたつの見立ての「難しい方」を採る。
+// 判定は下絵を 256x192 に縮小したアルファ（＝線の濃さ）だけで行う軽い方法。
+// 4歳児にとっての難しさは「線の数」ではなく次の 2つで決まる、という見立てで測る:
+//
+//   - 細い線の量（fine）: 縮小すると太い線は濃いまま残り、羽根・毛・草・ハッチングの
+//     ような細い線は薄くなる。「薄いのに 濃い線の隣ではない」画素だけを数えれば、
+//     太い線のフチ（アンチエイリアス）と区別して細い線だけを拾える
+//   - 小さい領域の広さ（small）: 塗れる面積のうち、小さな区画が占める割合。
+//     うろこ・羽・模様のような細かい塗り分けほど大きくなる
+//
+// ふたつの見立ての「難しい方」を採る。領域の"数"を使うと、大きな葉が並ぶだけの
+// 素朴な絵（velociraptor）が難しい側に、細い線だらけの絵（fukuivenator）が簡単側に
+// 落ちてしまうため、数ではなく「細さ」と「小ささ」で測っている。
 //
 // 結果は下絵 id ごとに IndexedDB へキャッシュする（下絵が同じなら結果も同じ）。
 // 大人が手で決めた上書きは artmeta 側にあり、そちらが優先される（main.ts）。
@@ -27,7 +34,7 @@ export const LEVEL_NAME: Record<Level, string> = {
 };
 
 /** 判定アルゴリズムの版。しきい値や手順を変えたら上げる（古いキャッシュを捨てる）。 */
-const LEVEL_VERSION = 1;
+const LEVEL_VERSION = 2;
 
 /** 判定に使う縮小サイズ。1024x768 の 1/4（4:3 を保つ）。 */
 const ANALYZE_W = 256;
@@ -36,16 +43,21 @@ const ANALYZE_H = 192;
 /** これ以上のアルファを「線」とみなす。縮小で薄くなった細線も拾えるよう低めにする。 */
 const INK_ALPHA = 48;
 
-/** 塗る領域として数える最小面積（全画素に対する割合）。ゴマ粒は数えない。 */
-const MIN_REGION_FRAC = 0.0015;
+/** これ以上のアルファは「太い線」。縮小しても濃さが残るのは太い線だけ。 */
+const STRONG_ALPHA = 200;
 
-// しきい値は同梱の下絵 64 点（組み込み 20 + 共有 44）を実測して決めた。
-// 領域数: 組み込みの単体恐竜が 2〜9、風景つきが 10〜24、細密なものが 25〜52。
-// 線密度: 単体恐竜が 6〜14%、細密なもの（草むら・うろこ・ハッチング）が 27〜37%。
-const REGION_MAX_L1 = 9;
-const REGION_MAX_L2 = 24;
-const INK_MAX_L1 = 0.15;
-const INK_MAX_L2 = 0.22;
+/** これ未満の面積（全画素に対する割合）の区画を「小さい領域」として数える。 */
+const SMALL_REGION_FRAC = 0.01;
+
+// しきい値は同梱の下絵 64 点（組み込み 20 + 共有 44）の実測と、実際に見て付けた
+// 正解ラベルから決めた。
+// 細い線の量: 組み込み SVG（太線のみ）は 0、素朴な共有下絵が 0.1〜1.5、
+//   羽根やハッチングのある下絵が 2.7〜13。
+// 小さい領域: 素朴な下絵が 0〜15%、うろこ・翅のような細かい絵が 21〜31%。
+const FINE_MAX_L1 = 0.4;
+const FINE_MAX_L2 = 2.5;
+const SMALL_MAX_L1 = 8;
+const SMALL_MAX_L2 = 20;
 
 /** 読めない下絵など、判定できないときのレベル。 */
 const FALLBACK_LEVEL: Level = 2;
@@ -57,19 +69,44 @@ const FALLBACK_LEVEL: Level = 2;
 export function estimateLevel(alpha: Uint8Array, w: number, h: number): Level {
   const total = w * h;
   const ink = new Uint8Array(total);
-  let inkCount = 0;
+  const strong = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
     if (alpha[i] >= INK_ALPHA) {
       ink[i] = 1;
-      inkCount++;
+      if (alpha[i] >= STRONG_ALPHA) strong[i] = 1;
     }
   }
 
-  // 線でない画素の連結成分（4近傍）を数える。再帰ではなく明示スタックで塗りつぶす。
-  const minArea = Math.max(8, Math.round(total * MIN_REGION_FRAC));
+  // 細い線の量: 薄い線の画素のうち、太い線に接していないもの（＝太線のフチではなく
+  // それ自体が細い線）が画面に占める割合。
+  let fineCount = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!ink[i] || strong[i]) continue;
+      let nearStrong = false;
+      for (let dy = -1; dy <= 1 && !nearStrong; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (strong[ny * w + nx]) {
+            nearStrong = true;
+            break;
+          }
+        }
+      }
+      if (!nearStrong) fineCount++;
+    }
+  }
+
+  // 小さい領域の広さ: 線でない画素の連結成分（4近傍）を塗りつぶしながら面積を測り、
+  // 塗れる面積のうち小さな区画が占める割合を出す。明示スタックで再帰を避ける。
+  const smallArea = Math.round(total * SMALL_REGION_FRAC);
   const seen = new Uint8Array(total);
   const stack = new Int32Array(total);
-  let regions = 0;
+  let paintable = 0;
+  let smallSum = 0;
   for (let start = 0; start < total; start++) {
     if (ink[start] || seen[start]) continue;
     let sp = 0;
@@ -98,13 +135,15 @@ export function estimateLevel(alpha: Uint8Array, w: number, h: number): Level {
         stack[sp++] = p + w;
       }
     }
-    if (area >= minArea) regions++;
+    paintable += area;
+    if (area < smallArea) smallSum += area;
   }
 
-  const inkRatio = inkCount / total;
-  const byRegion: Level = regions <= REGION_MAX_L1 ? 1 : regions <= REGION_MAX_L2 ? 2 : 3;
-  const byInk: Level = inkRatio <= INK_MAX_L1 ? 1 : inkRatio <= INK_MAX_L2 ? 2 : 3;
-  return Math.max(byRegion, byInk) as Level;
+  const fine = (fineCount / total) * 100;
+  const small = paintable > 0 ? (smallSum / paintable) * 100 : 0;
+  const byFine: Level = fine <= FINE_MAX_L1 ? 1 : fine <= FINE_MAX_L2 ? 2 : 3;
+  const bySmall: Level = small <= SMALL_MAX_L1 ? 1 : small <= SMALL_MAX_L2 ? 2 : 3;
+  return Math.max(byFine, bySmall) as Level;
 }
 
 /** 下絵 1 点を縮小して判定する（キャッシュを使わない実処理）。 */
