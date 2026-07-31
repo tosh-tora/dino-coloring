@@ -14,61 +14,26 @@
 //   node scripts/compute-art-levels.mjs --check   書き換えず、現在の値との差だけ表示する
 //
 // TypeScript を直接 import するので Node 22.6 以上が必要（型注釈の除去）。
-import sharp from "sharp";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lineAlpha, levelFromAlpha, LEVEL_MARK } from "../src/level-core.ts";
+import { levelFromAlpha, LEVEL_MARK } from "../src/level-core.ts";
+import { toLineartRaw, CANVAS_W, CANVAS_H } from "./lib/lineart-raw.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CUSTOM_DIR = path.join(ROOT, "public", "custom");
 const MANIFEST = path.join(CUSTOM_DIR, "index.json");
 const LINEART_DIR = path.join(ROOT, "assets", "lineart");
 
-// src/lineart.ts の CANVAS_W/CANVAS_H と同じ値。この定数を変えたらここも合わせること
-const CANVAS_W = 1024;
-const CANVAS_H = 768;
-
 /** 組み込み SVG の想定レベル（src/lineart.ts の BUILTIN_LEVEL と同じ値）。 */
 const BUILTIN_LEVEL = 1;
 
 const check = process.argv.includes("--check");
 
-/**
- * 画像 1 点を 1024x768 の「線の濃さ」に変換する。src/template.ts の toTransparent と
- * 同じ考え方: 縦横比を保って中に収め、余白は透明、白に近い画素ほど透明にする。
- */
-async function toAlpha(input) {
-  const img = sharp(input).ensureAlpha();
-  const meta = await img.metadata();
-  // 収まらない画像だけ縮める（同梱の下絵は optimize-shared-art.mjs で縮小済み＝等倍）
-  const scale = Math.min(CANVAS_W / meta.width, CANVAS_H / meta.height, 1);
-  const w = Math.round(meta.width * scale);
-  const h = Math.round(meta.height * scale);
-  const top = Math.floor((CANVAS_H - h) / 2);
-  const left = Math.floor((CANVAS_W - w) / 2);
-
-  const { data } = await img
-    .resize(w, h, { kernel: "lanczos3" })
-    .extend({
-      top,
-      left,
-      bottom: CANVAS_H - h - top,
-      right: CANVAS_W - w - left,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  const alpha = new Uint8Array(CANVAS_W * CANVAS_H);
-  for (let i = 0, p = 0; p < alpha.length; i += 4, p++) {
-    alpha[p] = lineAlpha(data[i], data[i + 1], data[i + 2], data[i + 3]);
-  }
-  return alpha;
-}
-
+/** 画像 1 点のレベルを判定する。透明化は optimize-shared-art.mjs と同じ変換を通す。 */
 async function levelOf(input) {
-  return levelFromAlpha(await toAlpha(input), CANVAS_W, CANVAS_H);
+  const { alpha } = await toLineartRaw(input);
+  return levelFromAlpha(alpha, CANVAS_W, CANVAS_H);
 }
 
 // ---- 共有下絵 ----
