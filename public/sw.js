@@ -3,7 +3,7 @@
 //   オンライン時は常に最新を取得（＝新デプロイ・新しい共有下絵がすぐ届く）、
 //   オフライン時はキャッシュにフォールバック。
 // - それ以外の同一オリジン GET（ハッシュ付き JS/CSS、png 等）は cache-first。
-const CACHE_NAME = "dino-coloring-v8";
+const CACHE_NAME = "dino-coloring-v9";
 const PRECACHE = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
