@@ -389,13 +389,18 @@ export class PaintEngine {
     this.onStrokeEnd?.();
   }
 
+  /** 塗りをまるごと差し替える。undo は積まないので、ここまでは戻れない */
+  loadSource(src: CanvasImageSource): void {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(src, 0, 0, this.canvas.width, this.canvas.height);
+  }
+
   /** 保存済みの塗りを復元する */
   loadDataUrl(dataUrl: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+        this.loadSource(img);
         resolve();
       };
       img.onerror = reject;
