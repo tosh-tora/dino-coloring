@@ -13,7 +13,7 @@ import {
   DEFAULT_PROMPT_OPTIONS,
   type PromptOptions,
 } from "./template";
-import { loadSharedArts } from "./shared";
+import { loadSharedArts, warmSharedArts } from "./shared";
 import { cutOutSubjects, type Subject } from "./subject";
 import { playSubjects } from "./animate";
 import type { Category } from "./categories";
@@ -125,17 +125,14 @@ function saveAllowedLevels(levels: Set<Level>) {
 
 // ---------------------------------------------------------------- library
 
+/**
+ * ライブラリー画面。
+ *
+ * 下絵の一覧（IndexedDB と共有下絵のマニフェスト）を待ってから描くと、その間タイトルも
+ * 出ない真っ白な画面になり「反応していない」ように見える。そこで枠（ヘッダーと
+ * よみこみ中の表示）だけ先に await 無しで描き、中身はあとから差し込む。
+ */
 async function showLibrary() {
-  const workIds = await store.getWorkIds().catch(() => new Set<string>());
-  const { categories, arts } = await collectArts();
-  const { effective: levelOf } = await resolveLevels(arts);
-  const allowedLevels = loadAllowedLevels();
-
-  // 削除済みカテゴリーが選択中なら「ぜんぶ」に戻す
-  if (libraryFilter && !categories.some((c) => c.id === libraryFilter)) libraryFilter = null;
-  // 親の設定で見せなくなったレベルが選択中なら「ぜんぶ」に戻す
-  if (libraryLevel !== null && !allowedLevels.has(libraryLevel)) libraryLevel = null;
-
   app.innerHTML = "";
   const screen = document.createElement("div");
   screen.className = "screen library";
@@ -164,9 +161,39 @@ async function showLibrary() {
   header.append(title, makeMuteButton(), makerBtn, galleryBtn);
   screen.appendChild(header);
 
-  // 絞り込みバー: 左に分類チップ（多いので横スクロール）、右端にレベルチップを固定する
+  // 絞り込みバー: 左に分類チップ（多いので横スクロール）、右端にレベルチップを固定する。
+  // 中身は分類（IndexedDB）が要るので、枠だけ置いてあとで埋める。
   const filterBar = document.createElement("div");
   filterBar.className = "filter-bar";
+  screen.appendChild(filterBar);
+
+  const grid = document.createElement("div");
+  grid.className = "library-grid";
+  const loading = document.createElement("div");
+  loading.className = "library-loading";
+  loading.textContent = "よみこみちゅう… 🦕";
+  grid.appendChild(loading);
+  screen.appendChild(grid);
+  app.appendChild(screen);
+
+  // BGM は初期画面（ライブラリー）のみ。AudioContext のジェスチャ制約により
+  // 実際の再生は最初のタップ後に始まる。
+  startBgm();
+
+  // ---- ここから下は待ちが入る（初回表示はここまでで見えている） ----
+
+  const workIds = await store.getWorkIds().catch(() => new Set<string>());
+  const { categories, arts } = await collectArts();
+  const { effective: levelOf } = await resolveLevels(arts);
+  // 待っているあいだに別の画面へ移っていたら、もう描かない
+  if (!screen.isConnected) return;
+
+  const allowedLevels = loadAllowedLevels();
+  // 削除済みカテゴリーが選択中なら「ぜんぶ」に戻す
+  if (libraryFilter && !categories.some((c) => c.id === libraryFilter)) libraryFilter = null;
+  // 親の設定で見せなくなったレベルが選択中なら「ぜんぶ」に戻す
+  if (libraryLevel !== null && !allowedLevels.has(libraryLevel)) libraryLevel = null;
+
   const catGroup = document.createElement("div");
   catGroup.className = "filter-group filter-cats";
   const addChip = (label: string, value: string | null) => {
@@ -204,10 +231,6 @@ async function showLibrary() {
     }
     filterBar.append(levelGroup);
   }
-  screen.appendChild(filterBar);
-
-  const grid = document.createElement("div");
-  grid.className = "library-grid";
 
   // レベルはカードには出さない（絵を見せたいので）。絞り込みチップだけで足りる。
   const makeCard = (art: LineArt, origin: ArtOrigin, level: Level) => {
@@ -218,6 +241,9 @@ async function showLibrary() {
     img.src = lineArtSrc(art);
     img.alt = art.name;
     img.draggable = false;
+    // 一覧は 67 点ぶん並ぶので、画面に入ったものから読み込む（一斉デコードを避ける）
+    img.loading = "lazy";
+    img.decoding = "async";
     const label = document.createElement("span");
     label.className = "art-name";
     label.textContent = art.name;
@@ -265,6 +291,7 @@ async function showLibrary() {
       (libraryLevel === null || level === libraryLevel)
     );
   });
+  grid.innerHTML = ""; // よみこみ中の表示を片付ける
   if (visible.length === 0) {
     const empty = document.createElement("div");
     empty.className = "gallery-empty";
@@ -274,12 +301,9 @@ async function showLibrary() {
   for (const a of visible) {
     grid.appendChild(makeCard(a.art, a.origin, levelOf.get(a.art.id) ?? 2));
   }
-  screen.appendChild(grid);
-  app.appendChild(screen);
 
-  // BGM は初期画面（ライブラリー）のみ。AudioContext のジェスチャ制約により
-  // 実際の再生は最初のタップ後に始まる。
-  startBgm();
+  // 表示が終わってから、まだ見ていない共有下絵を裏で取ってオフラインに備える
+  warmSharedArts(arts.filter((a) => a.origin === "shared").map((a) => a.art));
 }
 
 /** 塗りかけがあるとき: つづきから / あたらしく を選ぶオーバーレイ */
@@ -518,6 +542,8 @@ async function showManage() {
     img.className = "manage-thumb";
     img.src = lineArtSrc(a.art);
     img.draggable = false;
+    img.loading = "lazy";
+    img.decoding = "async";
 
     const info = document.createElement("div");
     info.className = "manage-info";

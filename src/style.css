@@ -1182,6 +1182,36 @@ body {
   padding: 80px 20px;
 }
 
+/* 下絵一覧を用意しているあいだの表示。すぐ用意できたときにチラつかせないよう、
+   0.25 秒たってから現れる */
+.library-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 28px;
+  color: #999;
+  padding: 80px 20px;
+  animation: loading-appear 0.3s 0.25s both, loading-pulse 1.6s 0.55s infinite;
+}
+
+@keyframes loading-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
 /* ---------------------------------------------------------------- confetti */
 
 .confetti-overlay {
