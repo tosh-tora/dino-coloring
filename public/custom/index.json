@@ -4,283 +4,330 @@
       "id": "shared-spinosaurus",
       "name": "スピノサウルス",
       "category": "cat-dino",
-      "file": "shared-spinosaurus.png"
+      "file": "shared-spinosaurus.png",
+      "level": 2
     },
     {
       "id": "shared-trex-vs-triceratops",
       "name": "トリケラトプスとティラノサウルスのたたかい",
       "category": "cat-dino",
-      "file": "shared-trex-vs-triceratops.png"
+      "file": "shared-trex-vs-triceratops.png",
+      "level": 2
     },
     {
       "id": "shared-ankylosaurus",
       "name": "アンキロサウルス",
       "category": "cat-dino",
-      "file": "shared-ankylosaurus.png"
+      "file": "shared-ankylosaurus.png",
+      "level": 3
     },
     {
       "id": "shared-purussaurus-paraceratherium",
       "name": "プルスサウルスとパラケラテリウムのたたかい",
       "category": "cat-extinct",
-      "file": "shared-purussaurus-paraceratherium.png"
+      "file": "shared-purussaurus-paraceratherium.png",
+      "level": 2
     },
     {
       "id": "shared-ankylosaurus-vs-trex",
       "name": "アンキロサウルス vs ティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-ankylosaurus-vs-trex.png"
+      "file": "shared-ankylosaurus-vs-trex.png",
+      "level": 3
     },
     {
       "id": "shared-pachycephalosaurus",
       "name": "パキケファロサウルス",
       "category": "cat-dino",
-      "file": "shared-pachycephalosaurus.png"
+      "file": "shared-pachycephalosaurus.png",
+      "level": 2
     },
     {
       "id": "shared-pachycephalosaurus-realistic",
       "name": "パキケファロサウルス",
       "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-realistic.png"
+      "file": "shared-pachycephalosaurus-realistic.png",
+      "level": 3
     },
     {
       "id": "shared-hercules-beetle",
       "name": "ヘラクレスオオカブト",
       "category": "cat-animal",
-      "file": "shared-hercules-beetle.png"
+      "file": "shared-hercules-beetle.png",
+      "level": 3
     },
     {
       "id": "shared-snake",
       "name": "へび",
       "category": "cat-animal",
-      "file": "shared-snake.png"
+      "file": "shared-snake.png",
+      "level": 3
     },
     {
       "id": "shared-stegosaurus",
       "name": "ステゴサウルス",
       "category": "cat-dino",
-      "file": "shared-stegosaurus.png"
+      "file": "shared-stegosaurus.png",
+      "level": 2
     },
     {
       "id": "shared-pteranodon",
       "name": "プテラノドン",
       "category": "cat-dino",
-      "file": "shared-pteranodon.png"
+      "file": "shared-pteranodon.png",
+      "level": 3
     },
     {
       "id": "shared-quetzalcoatlus",
       "name": "ケツァルコアトルス",
       "category": "cat-dino",
-      "file": "shared-quetzalcoatlus.png"
+      "file": "shared-quetzalcoatlus.png",
+      "level": 2
     },
     {
       "id": "shared-stegosaurus-vs-triceratops",
       "name": "ステゴサウルスとトリケラトプスのつなひき",
       "category": "cat-dino",
-      "file": "shared-stegosaurus-vs-triceratops.png"
+      "file": "shared-stegosaurus-vs-triceratops.png",
+      "level": 1
     },
     {
       "id": "shared-pteranodon-flying",
       "name": "プテラノドン",
       "category": "cat-dino",
-      "file": "shared-pteranodon-flying.png"
+      "file": "shared-pteranodon-flying.png",
+      "level": 3
     },
     {
       "id": "shared-parasaurolophus",
       "name": "パラサウロロフス",
       "category": "cat-dino",
-      "file": "shared-parasaurolophus.png"
+      "file": "shared-parasaurolophus.png",
+      "level": 3
     },
     {
       "id": "shared-quetzalcoatlus-titled",
       "name": "ケツァルコアトルス",
       "category": "cat-dino",
-      "file": "shared-quetzalcoatlus-titled.png"
+      "file": "shared-quetzalcoatlus-titled.png",
+      "level": 3
     },
     {
       "id": "shared-ammonite",
       "name": "アンモナイト",
       "category": "cat-sea",
-      "file": "shared-ammonite.png"
+      "file": "shared-ammonite.png",
+      "level": 3
     },
     {
       "id": "shared-stegosaurus-realistic",
       "name": "ステゴサウルス",
       "category": "cat-dino",
-      "file": "shared-stegosaurus-realistic.png"
+      "file": "shared-stegosaurus-realistic.png",
+      "level": 3
     },
     {
       "id": "shared-trex-volcano",
       "name": "ティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-trex-volcano.png"
+      "file": "shared-trex-volcano.png",
+      "level": 3
     },
     {
       "id": "shared-ankylosaurus-vs-trex-realistic",
       "name": "アンキロサウルス vs ティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-ankylosaurus-vs-trex-realistic.png"
+      "file": "shared-ankylosaurus-vs-trex-realistic.png",
+      "level": 3
     },
     {
       "id": "shared-triceratops-volcano",
       "name": "トリケラトプス",
       "category": "cat-dino",
-      "file": "shared-triceratops-volcano.png"
+      "file": "shared-triceratops-volcano.png",
+      "level": 3
     },
     {
       "id": "shared-pachycephalosaurus-parent",
       "name": "パキケファロサウルス おやこ",
       "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-parent.png"
+      "file": "shared-pachycephalosaurus-parent.png",
+      "level": 3
     },
     {
       "id": "shared-stegosaurus-parent",
       "name": "ステゴサウルス おやこ",
       "category": "cat-dino",
-      "file": "shared-stegosaurus-parent.png"
+      "file": "shared-stegosaurus-parent.png",
+      "level": 1
     },
     {
       "id": "shared-ornithomimus",
       "name": "オルニトミムス",
       "category": "cat-dino",
-      "file": "shared-ornithomimus.png"
+      "file": "shared-ornithomimus.png",
+      "level": 1
     },
     {
       "id": "shared-ornithomimus-scene",
       "name": "オルニトミムス",
       "category": "cat-dino",
-      "file": "shared-ornithomimus-scene.png"
+      "file": "shared-ornithomimus-scene.png",
+      "level": 2
     },
     {
       "id": "shared-mosasaurus",
       "name": "モササウルス",
       "category": "cat-sea",
-      "file": "shared-mosasaurus.png"
+      "file": "shared-mosasaurus.png",
+      "level": 2
     },
     {
       "id": "shared-plesiosaurus",
       "name": "プレシオサウルス",
       "category": "cat-sea",
-      "file": "shared-plesiosaurus.png"
+      "file": "shared-plesiosaurus.png",
+      "level": 3
     },
     {
       "id": "shared-archelon",
       "name": "アーケロン",
       "category": "cat-sea",
-      "file": "shared-archelon.png"
+      "file": "shared-archelon.png",
+      "level": 3
     },
     {
       "id": "shared-iguanodon",
       "name": "イグアノドン",
       "category": "cat-dino",
-      "file": "shared-iguanodon.png"
+      "file": "shared-iguanodon.png",
+      "level": 2
     },
     {
       "id": "shared-mammoth",
       "name": "マンモス",
       "category": "cat-extinct",
-      "file": "shared-mammoth.png"
+      "file": "shared-mammoth.png",
+      "level": 1
     },
     {
       "id": "shared-pachycephalosaurus-battle",
       "name": "パキケファロサウルス",
       "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-battle.png"
+      "file": "shared-pachycephalosaurus-battle.png",
+      "level": 3
     },
     {
       "id": "shared-velociraptor",
       "name": "ヴェロキラプトル",
       "category": "cat-dino",
-      "file": "shared-velociraptor.png"
+      "file": "shared-velociraptor.png",
+      "level": 2
     },
     {
       "id": "shared-brachiosaurus",
       "name": "ブラキオサウルス",
       "category": "cat-dino",
-      "file": "shared-brachiosaurus.png"
+      "file": "shared-brachiosaurus.png",
+      "level": 1
     },
     {
       "id": "shared-megalodon",
       "name": "メガロドン",
       "category": "cat-extinct",
-      "file": "shared-megalodon.png"
+      "file": "shared-megalodon.png",
+      "level": 2
     },
     {
       "id": "shared-megalodon-simple",
       "name": "メガロドン",
       "category": "cat-extinct",
-      "file": "shared-megalodon-simple.png"
+      "file": "shared-megalodon-simple.png",
+      "level": 1
     },
     {
       "id": "shared-fukuivenator",
       "name": "フクイベナートル",
       "category": "cat-dino",
-      "file": "shared-fukuivenator.png"
+      "file": "shared-fukuivenator.png",
+      "level": 3
     },
     {
       "id": "shared-andrewsarchus",
       "name": "アンドリューサルクス",
       "category": "cat-extinct",
-      "file": "shared-andrewsarchus.png"
+      "file": "shared-andrewsarchus.png",
+      "level": 3
     },
     {
       "id": "shared-hornet",
       "name": "オオスズメバチ",
       "category": "cat-animal",
-      "file": "shared-hornet.png"
+      "file": "shared-hornet.png",
+      "level": 3
     },
     {
       "id": "shared-polar-bear",
       "name": "ホッキョクグマ",
       "category": "cat-animal",
-      "file": "shared-polar-bear.png"
+      "file": "shared-polar-bear.png",
+      "level": 3
     },
     {
       "id": "shared-lion",
       "name": "ライオン",
       "category": "cat-animal",
-      "file": "shared-lion.png"
+      "file": "shared-lion.png",
+      "level": 2
     },
     {
       "id": "shared-giganotosaurus-trex",
       "name": "ギガノトサウルスとティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-giganotosaurus-trex.png"
+      "file": "shared-giganotosaurus-trex.png",
+      "level": 3
     },
     {
       "id": "shared-parasaurolophus-scene",
       "name": "パラサウロロフス",
       "category": "cat-dino",
-      "file": "shared-parasaurolophus-scene.png"
+      "file": "shared-parasaurolophus-scene.png",
+      "level": 2
     },
     {
       "id": "shared-giganotosaurus-triceratops",
       "name": "ギガノトサウルスとトリケラトプス",
       "category": "cat-dino",
-      "file": "shared-giganotosaurus-triceratops.png"
+      "file": "shared-giganotosaurus-triceratops.png",
+      "level": 2
     },
     {
       "id": "shared-giganotosaurus-trex-ruins",
       "name": "ギガノトサウルスとティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-giganotosaurus-trex-ruins.png"
+      "file": "shared-giganotosaurus-trex-ruins.png",
+      "level": 3
     },
     {
       "id": "shared-argentinosaurus",
       "name": "アルゼンチノサウルス",
       "category": "cat-dino",
-      "file": "shared-argentinosaurus.png"
+      "file": "shared-argentinosaurus.png",
+      "level": 3
     },
     {
       "id": "shared-spinosaurus-vs-trex",
       "name": "スピノサウルス vs ティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-spinosaurus-vs-trex.png"
+      "file": "shared-spinosaurus-vs-trex.png",
+      "level": 3
     },
     {
       "id": "shared-triceratops-herd",
       "name": "トリケラトプスのむれ",
       "category": "cat-dino",
-      "file": "shared-triceratops-herd.png"
+      "file": "shared-triceratops-herd.png",
+      "level": 2
     }
   ]
 }

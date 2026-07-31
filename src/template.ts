@@ -1,6 +1,7 @@
 // 下絵メーカー: アップロード画像の下絵化（白背景の透明化）と、外部画像生成AI用の
 // 英語プロンプト生成、クリップボードコピーのユーティリティ。
 import { CANVAS_W, CANVAS_H } from "./lineart";
+import { lineAlpha, levelFromAlpha, type Level } from "./level-core";
 
 /** File を Image 要素に読み込む */
 function fileToImage(file: File): Promise<HTMLImageElement> {
@@ -18,12 +19,12 @@ function fileToImage(file: File): Promise<HTMLImageElement> {
 }
 
 /**
- * 読み込み済み画像を下絵（透明背景の線画）に変換する。
+ * 読み込み済み画像を下絵（透明背景の線画）にして、data URL と線の濃さ（アルファ）を返す。
  * - 1024×768 canvas に contain 配置（縦横比を保って中央に収める）で描画。
  * - 白に近い画素ほど透明にして、暗い線だけを残す。これで塗りレイヤーが下から透ける。
- * 返り値は透明 PNG の data URL。アップロードと共有下絵ロードの両方で使う。
+ * アルファはレベル判定にそのまま使える（画像を読み直さずに済む）。
  */
-export function imageToTransparentDataUrl(img: HTMLImageElement): string {
+function toTransparent(img: HTMLImageElement): { imageUrl: string; alpha: Uint8Array } {
   const canvas = document.createElement("canvas");
   canvas.width = CANVAS_W;
   canvas.height = CANVAS_H;
@@ -40,31 +41,36 @@ export function imageToTransparentDataUrl(img: HTMLImageElement): string {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, x, y, w, h);
 
-  // 白背景 → 透明化。明るさ 235 以上は完全透明、190〜235 は線形に減衰。
+  // 白背景 → 透明化（規則は level-core.ts の lineAlpha に集約。CLI と同じもの）
   const data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
   const px = data.data;
-  const HI = 235; // これ以上明るい画素は透明
-  const LO = 190; // これ以下の暗さは線として残す
-  for (let i = 0; i < px.length; i += 4) {
-    const a = px[i + 3];
-    if (a === 0) continue;
-    // 知覚輝度
-    const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-    if (lum >= HI) {
-      px[i + 3] = 0;
-    } else if (lum > LO) {
-      const t = (HI - lum) / (HI - LO); // LO で1, HI で0
-      px[i + 3] = Math.round(a * t);
-    }
+  const alpha = new Uint8Array(CANVAS_W * CANVAS_H);
+  for (let i = 0, p = 0; i < px.length; i += 4, p++) {
+    const a = lineAlpha(px[i], px[i + 1], px[i + 2], px[i + 3]);
+    px[i + 3] = a;
+    alpha[p] = a;
   }
   ctx.putImageData(data, 0, 0);
-  return canvas.toDataURL("image/png");
+  return { imageUrl: canvas.toDataURL("image/png"), alpha };
 }
 
-/** アップロードされた画像ファイルを透明背景の下絵 data URL に変換する。 */
-export async function processUploadedImage(file: File): Promise<string> {
-  const img = await fileToImage(file);
-  return imageToTransparentDataUrl(img);
+/**
+ * 読み込み済み画像を透明背景の下絵 data URL にする。
+ * 共有下絵の読み込みで使う（レベルは index.json に焼き込み済みなので判定しない）。
+ */
+export function imageToTransparentDataUrl(img: HTMLImageElement): string {
+  return toTransparent(img).imageUrl;
+}
+
+/**
+ * アップロードされた画像ファイルを下絵にする。レベルはこの取り込み時に 1 回だけ判定し、
+ * 以後は保存された値を使う（端末やブラウザが変わっても揺れないように）。
+ */
+export async function processUploadedImage(
+  file: File
+): Promise<{ imageUrl: string; level: Level }> {
+  const { imageUrl, alpha } = toTransparent(await fileToImage(file));
+  return { imageUrl, level: levelFromAlpha(alpha, CANVAS_W, CANVAS_H) };
 }
 
 /**

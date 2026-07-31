@@ -56,6 +56,7 @@ async function collectArts(): Promise<{
     id: t.id,
     name: t.name,
     imageUrl: t.imageUrl,
+    level: t.level,
   }));
 
   const build = (art: LineArt, origin: ArtOrigin): ArtEntry => {
@@ -1184,11 +1185,12 @@ async function showTemplateMaker() {
     status.textContent = "変換中… ⏳";
     fileLabel.classList.add("disabled");
     try {
-      const imageUrl = await processUploadedImage(file);
+      // レベルはここで 1 回だけ判定して保存する（以後どの端末でも同じ値を使う）
+      const { imageUrl, level } = await processUploadedImage(file);
       const createdAt = Date.now();
       const id = "custom-" + createdAt;
       const name = nameInput.value.trim() || "マイぬりえ";
-      await store.addTemplate({ id, name, imageUrl, createdAt });
+      await store.addTemplate({ id, name, imageUrl, createdAt, level });
       if (catSelect.value) await store.setArtCategory(id, catSelect.value).catch(() => {});
       blip(760);
       overlay.remove();

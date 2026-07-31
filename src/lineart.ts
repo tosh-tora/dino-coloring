@@ -20,6 +20,7 @@ import butterflySvg from "../assets/lineart/butterfly.svg?raw";
 import therizinosaurusSvg from "../assets/lineart/therizinosaurus.svg?raw";
 import argentinosaurusSvg from "../assets/lineart/argentinosaurus.svg?raw";
 import { BUILTIN_CATEGORY } from "./categories";
+import type { Level } from "./level-core";
 
 export const CANVAS_W = 1024;
 export const CANVAS_H = 768;
@@ -33,7 +34,18 @@ export interface LineArt {
   imageUrl?: string;
   /** 既定カテゴリー id（artmeta の上書きが無いときに使う）。未分類は undefined */
   category?: string;
+  /**
+   * 焼き込み済みのレベル。組み込みは下の BUILTIN_LEVEL、共有下絵は index.json、
+   * アップロード画像は取り込み時に判定した値。無い下絵だけ実行時に判定する（level.ts）
+   */
+  level?: Level;
 }
+
+/**
+ * 組み込み線画のレベル。SVG は太い線だけで描いてあり細い線も細かい塗り分けも無いため
+ * 全点 ★1。`npm run art-levels` で実測して確かめられる（ずれると警告が出る）。
+ */
+const BUILTIN_LEVEL: Level = 1;
 
 // カタログ定義（category は categories.ts の BUILTIN_CATEGORY から自動付与）
 const catalogBase: Omit<LineArt, "category">[] = [
@@ -62,6 +74,7 @@ const catalogBase: Omit<LineArt, "category">[] = [
 export const catalog: LineArt[] = catalogBase.map((a) => ({
   ...a,
   category: BUILTIN_CATEGORY[a.id],
+  level: BUILTIN_LEVEL,
 }));
 
 export function getLineArt(id: string): LineArt | undefined {
