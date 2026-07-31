@@ -13,10 +13,16 @@
 // 素朴な絵（velociraptor）が難しい側に、細い線だらけの絵（fukuivenator）が簡単側に
 // 落ちてしまうため、数ではなく「細さ」と「小ささ」で測っている。
 //
+// 縮小はブラウザ任せ（drawImage の転送先を小さくする）にせず、等倍で描いてから 4x4 の
+// 面積平均を自前で行う。drawImage の縮小フィルターの品質は仕様で決まっておらず、Chrome は
+// 面積平均するが WebKit（iPad / Safari）は安価な間引きで済ませる。fine はアンチエイリアス
+// された薄い画素だけを見る指標なので、間引かれると真っ先に消え、iPad では ★3 がほぼ消えて
+// 大半が ★1 になっていた（fine が 15.5 → 0.1 まで落ちる下絵もあった）。
+//
 // 結果は下絵 id ごとに IndexedDB へキャッシュする（下絵が同じなら結果も同じ）。
 // 大人が手で決めた上書きは artmeta 側にあり、そちらが優先される（main.ts）。
 
-import { loadLineArtImage, type LineArt } from "./lineart";
+import { CANVAS_W, CANVAS_H, loadLineArtImage, type LineArt } from "./lineart";
 import * as store from "./store";
 
 export type Level = 1 | 2 | 3;
@@ -34,11 +40,14 @@ export const LEVEL_NAME: Record<Level, string> = {
 };
 
 /** 判定アルゴリズムの版。しきい値や手順を変えたら上げる（古いキャッシュを捨てる）。 */
-const LEVEL_VERSION = 2;
+const LEVEL_VERSION = 3;
 
 /** 判定に使う縮小サイズ。1024x768 の 1/4（4:3 を保つ）。 */
 const ANALYZE_W = 256;
 const ANALYZE_H = 192;
+
+/** 面積平均するブロックの一辺。CANVAS_W/H と ANALYZE_W/H の比（= 4）。 */
+const SCALE = CANVAS_W / ANALYZE_W;
 
 /** これ以上のアルファを「線」とみなす。縮小で薄くなった細線も拾えるよう低めにする。 */
 const INK_ALPHA = 48;
@@ -146,18 +155,50 @@ export function estimateLevel(alpha: Uint8Array, w: number, h: number): Level {
   return Math.max(byFine, bySmall) as Level;
 }
 
+/**
+ * 等倍（CANVAS_W x CANVAS_H）の RGBA からアルファだけを SCALE x SCALE の面積平均で
+ * ANALYZE_W x ANALYZE_H に縮小する。どのブラウザでも同じ値になるよう自前で計算する。
+ */
+function downscaleAlpha(rgba: Uint8ClampedArray): Uint8Array {
+  const alpha = new Uint8Array(ANALYZE_W * ANALYZE_H);
+  const block = SCALE * SCALE;
+  for (let y = 0; y < ANALYZE_H; y++) {
+    for (let x = 0; x < ANALYZE_W; x++) {
+      let sum = 0;
+      for (let dy = 0; dy < SCALE; dy++) {
+        // 元画像の 1 行ぶんの先頭（アルファは 4 バイトおき）
+        const row = ((y * SCALE + dy) * CANVAS_W + x * SCALE) * 4 + 3;
+        for (let dx = 0; dx < SCALE; dx++) sum += rgba[row + dx * 4];
+      }
+      alpha[y * ANALYZE_W + x] = Math.round(sum / block);
+    }
+  }
+  return alpha;
+}
+
+/** 判定用の canvas。下絵ごとに作らず使い回す（1024x768 を何十枚も作らないため）。 */
+let analyzeCtx: CanvasRenderingContext2D | null = null;
+
+function getAnalyzeCtx(): CanvasRenderingContext2D {
+  if (!analyzeCtx) {
+    const canvas = document.createElement("canvas");
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+    analyzeCtx = canvas.getContext("2d", { willReadFrequently: true })!;
+  }
+  return analyzeCtx;
+}
+
 /** 下絵 1 点を縮小して判定する（キャッシュを使わない実処理）。 */
 async function computeLevel(art: LineArt): Promise<Level> {
   const img = await loadLineArtImage(art);
-  const canvas = document.createElement("canvas");
-  canvas.width = ANALYZE_W;
-  canvas.height = ANALYZE_H;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(img, 0, 0, ANALYZE_W, ANALYZE_H);
-  const data = ctx.getImageData(0, 0, ANALYZE_W, ANALYZE_H).data;
-  const alpha = new Uint8Array(ANALYZE_W * ANALYZE_H);
-  for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
-  return estimateLevel(alpha, ANALYZE_W, ANALYZE_H);
+  const ctx = getAnalyzeCtx();
+  // canvas を使い回すので前の下絵を消す（下絵は透明部分があり、消さないと重なる）
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  // 等倍で描く（縮小フィルターを通さない）。組み込み SVG も共有下絵も 1024x768。
+  ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
+  const data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
+  return estimateLevel(downscaleAlpha(data), ANALYZE_W, ANALYZE_H);
 }
 
 /**
