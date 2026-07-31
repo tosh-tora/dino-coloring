@@ -236,7 +236,7 @@ async function showLibrary() {
       if (workIds.has(art.id)) {
         showResumeChooser(art, level);
       } else {
-        showColoring(art, false, level);
+        showColoring(art, { kind: "new" }, level);
       }
     });
     // ローカル下絵は長押しで削除（おとな向け操作）。押している間ゴミ箱に吸い込まれ、
@@ -294,7 +294,7 @@ function showResumeChooser(art: LineArt, level: Level) {
   resumeBtn.addEventListener("click", () => {
     blip(700);
     overlay.remove();
-    showColoring(art, true, level);
+    showColoring(art, { kind: "resume" }, level);
   });
 
   const newBtn = document.createElement("button");
@@ -304,7 +304,7 @@ function showResumeChooser(art: LineArt, level: Level) {
     blip(500);
     overlay.remove();
     await store.deleteWork(art.id).catch(() => {});
-    showColoring(art, false, level);
+    showColoring(art, { kind: "new" }, level);
   });
 
   const closeBtn = document.createElement("button");
@@ -1213,7 +1213,20 @@ async function showTemplateMaker() {
 
 // ---------------------------------------------------------------- coloring
 
-async function showColoring(art: LineArt, resume: boolean, level: Level) {
+/** ぬりえ画面の入り口。何から塗り始めるかで、保存先も戻り先も変わる */
+type ColoringStart =
+  /** まっさらから */
+  | { kind: "new" }
+  /** 塗りかけ (works) のつづきから */
+  | { kind: "resume" }
+  /** 完成作品を塗り直す。「できた！」でこの作品を上書きする */
+  | { kind: "reedit"; item: store.GalleryItem };
+
+async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
+  // 塗り直しは「完成作品を直す」ので、下絵ごとに 1 つしかない塗りかけ (works) には
+  // 触らない。別の絵の塗りかけを巻き添えで潰さないため（そのぶん「できた！」を
+  // 押さずに戻ると塗り足した分は消える）。
+  const reediting = start.kind === "reedit";
   stopBgm(); // ぬりえ画面では BGM を止める
   app.innerHTML = "";
   const screen = document.createElement("div");
@@ -1271,6 +1284,7 @@ async function showColoring(art: LineArt, resume: boolean, level: Level) {
       .catch(() => {});
   };
   const scheduleSave = () => {
+    if (reediting) return; // 塗り直し中は塗りかけを保存しない
     dirty = true;
     if (saveTimer !== null) clearTimeout(saveTimer);
     saveTimer = window.setTimeout(flushSave, 1500);
@@ -1297,9 +1311,25 @@ async function showColoring(art: LineArt, resume: boolean, level: Level) {
   } catch {
     // 例: 外部画像で canvas が汚染されて getImageData できない場合
   }
-  if (resume) {
+  if (start.kind === "resume") {
     const work = await store.getWork(art.id).catch(() => undefined);
     if (work) await engine.loadDataUrl(work.dataUrl).catch(() => {});
+  } else if (start.kind === "reedit") {
+    // 完成作品は「白 + 塗り + 線画」を焼いた 1 枚なので、線画を引き算して塗りだけに戻す。
+    // そのまま読ませると線画が塗りレイヤーに入り、上の線画と二重になって
+    // 消しゴムで線まで消せてしまう。
+    const img = await loadImage(start.item.dataUrl).catch(() => null);
+    if (img) {
+      const paint = document.createElement("canvas");
+      paint.width = CANVAS_W;
+      paint.height = CANVAS_H;
+      const pctx = paint.getContext("2d")!;
+      pctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
+      // 線があった所は下地の白が残る。紙 (.stage) も白なので見た目は変わらない
+      pctx.globalCompositeOperation = "destination-out";
+      pctx.drawImage(lineartCanvas, 0, 0);
+      engine.loadSource(paint);
+    }
   }
 
   const pagehide = () => {
@@ -1313,7 +1343,9 @@ async function showColoring(art: LineArt, resume: boolean, level: Level) {
     blip(420);
     window.removeEventListener("pagehide", pagehide);
     await flushSave();
-    showLibrary();
+    // 塗り直しはギャラリーから来ているので、そこへ返す
+    if (reediting) showGallery();
+    else showLibrary();
   });
 
   doneBtn.addEventListener("click", async () => {
@@ -1329,13 +1361,15 @@ async function showColoring(art: LineArt, resume: boolean, level: Level) {
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.drawImage(paintCanvas, 0, 0);
     ctx.drawImage(lineartCanvas, 0, 0);
-    await store
-      .addGalleryItem({
-        lineartId: art.id,
-        dataUrl: composite.toDataURL("image/png"),
-        createdAt: Date.now(),
-      })
-      .catch(() => {});
+    const dataUrl = composite.toDataURL("image/png");
+    if (start.kind === "reedit") {
+      // 並び順が動くと自分の絵を見失うので、createdAt はそのままに中身だけ差し替える
+      await store.putGalleryItem({ ...start.item, dataUrl }).catch(() => {});
+    } else {
+      await store
+        .addGalleryItem({ lineartId: art.id, dataUrl, createdAt: Date.now() })
+        .catch(() => {});
+    }
     window.removeEventListener("pagehide", pagehide);
     // 切り抜きは数百 ms かかるので、紙吹雪を出している間に裏で走らせる
     const cutting = cutOutSubjects(art, composite).catch(() => [] as Subject[]);
@@ -1417,10 +1451,10 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 async function showGallery() {
   stopBgm(); // ギャラリーでは BGM を止める
   let items = await store.getGallery().catch(() => []);
-  // タップで「うごかす」を再生するため、作品の下絵を引けるようにしておく
-  const artById = new Map<string, LineArt>();
-  for (const a of (await collectArts().catch(() => ({ arts: [] }))).arts) {
-    artById.set(a.art.id, a.art);
+  // タップで「うごかす」や「もっとぬる」へ進むため、作品の下絵を引けるようにしておく
+  const entryById = new Map<string, ArtEntry>();
+  for (const a of (await collectArts().catch(() => ({ arts: [] as ArtEntry[] }))).arts) {
+    entryById.set(a.art.id, a);
   }
 
   app.innerHTML = "";
@@ -1557,10 +1591,21 @@ async function showGallery() {
   async function playWork(item: store.GalleryItem) {
     const img = await loadImage(item.dataUrl).catch(() => null);
     if (!img) return;
-    const art = artById.get(item.lineartId);
+    const entry = entryById.get(item.lineartId);
     // 下絵が消えている作品は動かしようがないので、そのまま大きく見せる
-    const subjects = art ? await cutOutSubjects(art, img).catch(() => [] as Subject[]) : [];
-    await playSubjects(img, subjects);
+    const subjects = entry ? await cutOutSubjects(entry.art, img).catch(() => [] as Subject[]) : [];
+    // 下絵が無いと線画を描き直せない＝塗り直せないので、そのときはボタンを出さない
+    await playSubjects(img, subjects, {
+      onMore: entry ? () => void reeditWork(item, entry) : undefined,
+    });
+  }
+
+  /** 完成作品の続きを塗る。レベルは筆の太さの初期値にしか使わないのでここで引く */
+  async function reeditWork(item: store.GalleryItem, entry: ArtEntry) {
+    const { effective } = await resolveLevels([entry]).catch(() => ({
+      effective: new Map<string, Level>(),
+    }));
+    showColoring(entry.art, { kind: "reedit", item }, effective.get(entry.art.id) ?? 2);
   }
 
   function render() {
