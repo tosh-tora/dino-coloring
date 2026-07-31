@@ -263,6 +263,24 @@
       "name": "ギガノトサウルスとティラノサウルス",
       "category": "cat-dino",
       "file": "shared-giganotosaurus-trex-ruins.png"
+    },
+    {
+      "id": "shared-argentinosaurus",
+      "name": "アルゼンチノサウルス",
+      "category": "cat-dino",
+      "file": "shared-argentinosaurus.png"
+    },
+    {
+      "id": "shared-spinosaurus-vs-trex",
+      "name": "スピノサウルス vs ティラノサウルス",
+      "category": "cat-dino",
+      "file": "shared-spinosaurus-vs-trex.png"
+    },
+    {
+      "id": "shared-triceratops-herd",
+      "name": "トリケラトプスのむれ",
+      "category": "cat-dino",
+      "file": "shared-triceratops-herd.png"
     }
   ]
 }
