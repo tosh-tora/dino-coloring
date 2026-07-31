@@ -7,7 +7,6 @@ import {
   loadMyColors,
   saveMyColors,
 } from "./mycolors";
-import { openColorPicker } from "./colorpicker";
 
 export const PALETTE = [
   "#e74c3c", // あか
@@ -234,6 +233,12 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
   // 色が入っている枠は 1 タップ目でその色を選ぶだけ（ピッカーは開かない）。選択中の
   // 枠をもう一度タップするか、空の枠をタップするとピッカーが開き、その枠の色が
   // 選んだ色に置き換わる。
+  //
+  // ピッカーはブラウザ純正（input[type=color]）。iPad Safari は showPicker() での
+  // プログラム的なオープンを無視することがあるので、input を枠いっぱいに透明で重ね、
+  // 「ユーザーのタップが input 本体に当たる」形にして開かせる。上の 2 段階タップは
+  // CSS 側で input の pointer-events を切り替えることで成立させている
+  // （色入り・未選択の枠だけ input に当てず、下のボタンでタップを拾う）。
   const paletteBadgeSvg = `
     <svg viewBox="0 0 64 64" aria-hidden="true">
       <path d="M32 4 C49 4 61 15 61 28 C61 37 54 41 47 42 C42 43 39 45 39 49
@@ -254,6 +259,13 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
     badge.className = "mycolor-badge";
     badge.innerHTML = paletteBadgeSvg;
     btn.appendChild(badge);
+    // 枠いっぱいに透明で重ねる。タップはこの input が直接受け、純正ピッカーが開く。
+    // 値の初期化はここだけで行い、以降は input.value に触らない（ピッカーを開いて
+    // いる最中の代入はネイティブ UI の状態を乱しうるため）
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = myColors[i] ?? MY_COLOR_DEFAULT;
+    btn.appendChild(input);
 
     const render = () => {
       const color = myColors[i];
@@ -263,25 +275,31 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
     };
     render();
 
-    btn.addEventListener("click", async () => {
+    // 色が入っている未選択の枠でだけ呼ばれる（他の枠はタップを input が受ける）。
+    // input が受けたタップも bubbling で来るので、その場合は何もしない
+    btn.addEventListener("click", (e) => {
+      if (e.target === input) return;
       const color = myColors[i];
-      if (color && !btn.classList.contains("selected")) {
-        engine.setColor(color);
-        engine.setMode(overlayMode);
-        selectSwatch(btn);
-        blip(520);
-        return;
-      }
-      selectSwatch(btn);
-      blip(660);
-      const picked = await openColorPicker(color ?? MY_COLOR_DEFAULT);
-      if (picked === null) return; // キャンセル: 何も変えない
-      myColors[i] = picked.toLowerCase();
-      render();
-      engine.setColor(picked);
+      if (!color) return;
+      engine.setColor(color);
       engine.setMode(overlayMode);
-      saveMyColors(myColors);
+      selectSwatch(btn);
+      blip(520);
     });
+
+    // ピッカーはドラッグ中も input を連発するので、見た目と描画色を追従させる
+    input.addEventListener("input", () => {
+      myColors[i] = input.value.toLowerCase();
+      render();
+      engine.setColor(input.value);
+      engine.setMode(overlayMode);
+      selectSwatch(btn);
+    });
+    // 確定でもキャンセルでも、画面に見えている色をそのまま保存する。iOS のピッカーには
+    // キャンセルが無く選んだ色がそのまま残るので、そちらの挙動に揃えている
+    const persist = () => saveMyColors(myColors);
+    input.addEventListener("change", persist);
+    input.addEventListener("cancel", persist);
 
     swatches.push(btn);
     colorsEl.appendChild(btn);
