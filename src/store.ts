@@ -32,6 +32,12 @@ export interface CustomTemplate {
   /** 透明化済み下絵画像の data URL */
   imageUrl: string;
   createdAt: number;
+  /**
+   * 取り込み時に 1 回だけ判定したレベル。以後は再判定しないので端末やブラウザが
+   * 変わっても揺れない。この仕組みより前に追加された下絵には無く、その場合だけ
+   * 実行時に判定する（level.ts の getAutoLevels）
+   */
+  level?: Level;
 }
 
 /** 下絵から切り出した主役 1 体ぶん。マスクはアルファだけの PNG data URL で持つ。 */

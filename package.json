@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "optimize-art": "node scripts/optimize-shared-art.mjs"
+    "optimize-art": "node scripts/optimize-shared-art.mjs",
+    "art-levels": "node scripts/compute-art-levels.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3",

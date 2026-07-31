@@ -2,6 +2,7 @@
 // public/custom/index.json のマニフェストを読み、各 png を白→透明化して LineArt にする。
 // これらは全端末にデプロイで配布され、SW が network-first でマニフェストを更新する。
 import type { LineArt } from "./lineart";
+import { LEVELS, type Level } from "./level-core";
 import { imageToTransparentDataUrl } from "./template";
 
 interface SharedManifestItem {
@@ -9,6 +10,13 @@ interface SharedManifestItem {
   name: string;
   category?: string;
   file: string; // public/custom/ 以下のファイル名
+  /** 下絵を追加したときに `npm run art-levels` で判定して焼き込んだレベル */
+  level?: number;
+}
+
+/** マニフェストの level は外から来る値なので 1..3 のときだけ採用する。 */
+function toLevel(v: unknown): Level | undefined {
+  return LEVELS.find((l) => l === v);
 }
 
 const CUSTOM_BASE = import.meta.env.BASE_URL + "custom/";
@@ -52,6 +60,7 @@ export async function loadSharedArts(): Promise<LineArt[]> {
         name: it.name ?? "ぬりえ",
         imageUrl: imageToTransparentDataUrl(img),
         category: it.category,
+        level: toLevel(it.level),
       });
     } catch {
       // この1件はスキップ
