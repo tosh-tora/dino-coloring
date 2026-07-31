@@ -31,9 +31,18 @@ interface Actor {
   roarLeft: number;
 }
 
+export interface PlayOptions {
+  /**
+   * 「もっとぬる」を押したときの続き。渡したときだけボタンが出る。
+   * この画面を閉じてから呼ばれるので、そのまま次の画面へ進んでよい。
+   */
+  onMore?: () => void;
+}
+
 export function playSubjects(
   finished: CanvasImageSource,
-  subjects: Subject[]
+  subjects: Subject[],
+  opts: PlayOptions = {}
 ): Promise<void> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -56,7 +65,20 @@ export function playSubjects(
 
     const buttons = document.createElement("div");
     buttons.className = "subject-buttons";
-    buttons.append(playBtn, closeBtn);
+    buttons.append(playBtn);
+    const onMore = opts.onMore;
+    if (onMore) {
+      const moreBtn = document.createElement("button");
+      moreBtn.className = "nav-btn subject-more-btn";
+      moreBtn.textContent = "🖍️ もっとぬる";
+      moreBtn.addEventListener("click", () => {
+        blip(700);
+        close();
+        onMore();
+      });
+      buttons.appendChild(moreBtn);
+    }
+    buttons.append(closeBtn);
 
     const hint = document.createElement("p");
     hint.className = "subject-hint";
@@ -91,6 +113,13 @@ export function playSubjects(
     let running = false;
     let start = 0;
     let prev = 0;
+
+    /** この画面を片付けて呼び出し元へ返す */
+    function close() {
+      cancelAnimationFrame(raf);
+      overlay.remove();
+      resolve();
+    }
 
     /** その時刻での見た目の位置と拡大率 */
     function poseOf(a: Actor, t: number) {
@@ -134,7 +163,8 @@ export function playSubjects(
     function setRunning(on: boolean) {
       running = on;
       playBtn.textContent = on ? "✋ とめる" : "🦕 うごかす！";
-      hint.textContent = on ? "きょうりゅうを タップしてみよう！" : "ボタンを おすと うごくよ";
+      // 止まっている間は何も出さない（ボタンを見れば分かる）
+      hint.textContent = on ? "きょうりゅうを タップしてみよう！" : "";
       if (on) {
         start = performance.now();
         prev = start;
@@ -183,9 +213,7 @@ export function playSubjects(
 
     closeBtn.addEventListener("click", () => {
       blip(420);
-      cancelAnimationFrame(raf);
-      overlay.remove();
-      resolve();
+      close();
     });
   });
 }
