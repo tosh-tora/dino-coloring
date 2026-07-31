@@ -35,6 +35,9 @@ export function imageToTransparentDataUrl(img: HTMLImageElement): string {
   const h = img.height * scale;
   const x = (CANVAS_W - w) / 2;
   const y = (CANVAS_H - h) / 2;
+  // 大きい画像を縮めるときの品質。既定の "low" は WebKit だと細い線が消えるほど雑になる
+  // （level.ts の判定が iPad で壊れていたのと同じ理由）。仕様上はヒントだが既定よりは良い
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, x, y, w, h);
 
   // 白背景 → 透明化。明るさ 235 以上は完全透明、190〜235 は線形に減衰。
