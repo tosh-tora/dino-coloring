@@ -167,6 +167,17 @@ export async function addGalleryItem(item: GalleryItem): Promise<void> {
   await txDone(tx);
 }
 
+/**
+ * 完成作品を塗り直した内容で置き換える。並び順が動くと子どもが自分の絵を見失うので、
+ * createdAt は呼び出し側でもそのまま持ち回ること（この関数は item をそのまま書く）。
+ */
+export async function putGalleryItem(item: GalleryItem): Promise<void> {
+  const db = await openDB();
+  const tx = db.transaction("gallery", "readwrite");
+  tx.objectStore("gallery").put(item);
+  await txDone(tx);
+}
+
 export async function getGallery(): Promise<GalleryItem[]> {
   const db = await openDB();
   const items = await reqResult(db.transaction("gallery").objectStore("gallery").getAll());
