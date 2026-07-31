@@ -315,6 +315,10 @@ body {
   color: #3a7a52;
 }
 
+.tm-toast.warn {
+  color: #c2622f;
+}
+
 .tm-file {
   display: none;
 }
@@ -554,7 +558,8 @@ body {
 /* ---------------------------------------------------------------- manage / category editor */
 
 .manage,
-.cat-editor {
+.cat-editor,
+.save-works {
   position: relative;
   background: #fff;
   border-radius: 28px;
@@ -564,6 +569,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* サムネイルを複数列並べるぶん、かんり画面より広くとる */
+.save-works {
+  width: min(900px, 94vw);
 }
 
 /* 閉じるボタンが箱の外側にはみ出す分、箱自体は overflow させず中身側で吸収する。
@@ -1028,6 +1038,23 @@ body {
   justify-content: center;
   gap: 20px;
   /* 列数は表示領域から JS で決める */
+}
+
+/* さくひんの ほぞん画面: ページ送りではなくオーバーレイ内スクロールなので、
+   .gallery-grid の中央寄せ・JS 依存の列数計算を打ち消して列数は CSS に任せる */
+.save-grid {
+  flex: none;
+  align-content: start;
+  justify-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  padding-bottom: 6px;
+}
+
+.save-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .gallery-item {
