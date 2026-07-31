@@ -7,6 +7,7 @@ import {
   loadMyColors,
   saveMyColors,
 } from "./mycolors";
+import { openColorPicker } from "./colorpicker";
 
 export const PALETTE = [
   "#e74c3c", // あか
@@ -191,12 +192,6 @@ export function bindTrashLongPress(
   el.addEventListener("pointerleave", reset);
 }
 
-/** カラーピッカーを開く。showPicker 未対応の環境（古い Safari 等）は click() で代用する */
-function openPicker(input: HTMLInputElement) {
-  if (typeof input.showPicker === "function") input.showPicker();
-  else input.click();
-}
-
 export interface Toolbar {
   colorsEl: HTMLElement;
   toolsEl: HTMLElement;
@@ -259,11 +254,6 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
     badge.className = "mycolor-badge";
     badge.innerHTML = paletteBadgeSvg;
     btn.appendChild(badge);
-    // ピッカーの表示位置をこの枠の近くに寄せるためだけに置く。タップは枠側で拾いたい
-    // ので pointer-events は CSS で切ってあり、開くのは openPicker() から
-    const input = document.createElement("input");
-    input.type = "color";
-    btn.appendChild(input);
 
     const render = () => {
       const color = myColors[i];
@@ -273,7 +263,7 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
     };
     render();
 
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const color = myColors[i];
       if (color && !btn.classList.contains("selected")) {
         engine.setColor(color);
@@ -283,23 +273,15 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
         return;
       }
       selectSwatch(btn);
-      input.value = color ?? MY_COLOR_DEFAULT;
-      openPicker(input);
       blip(660);
-    });
-
-    // input はドラッグ中も連発するので、見た目と描画色だけ追従させる
-    input.addEventListener("input", () => {
-      myColors[i] = input.value.toLowerCase();
+      const picked = await openColorPicker(color ?? MY_COLOR_DEFAULT);
+      if (picked === null) return; // キャンセル: 何も変えない
+      myColors[i] = picked.toLowerCase();
       render();
-      engine.setColor(input.value);
+      engine.setColor(picked);
       engine.setMode(overlayMode);
+      saveMyColors(myColors);
     });
-    // 確定でもキャンセルでも、画面に見えている色をそのまま保存する。iOS のピッカーには
-    // キャンセルが無く選んだ色がそのまま残るので、そちらの挙動に揃えている
-    const persist = () => saveMyColors(myColors);
-    input.addEventListener("change", persist);
-    input.addEventListener("cancel", persist);
 
     swatches.push(btn);
     colorsEl.appendChild(btn);

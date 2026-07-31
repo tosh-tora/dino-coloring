@@ -555,6 +555,57 @@ body {
   accent-color: #f0a12e;
 }
 
+/* ---------------------------------------------------------------- 自作カラーピッカー */
+
+.color-picker {
+  position: relative;
+  background: #fff;
+  border-radius: 28px;
+  padding: 32px 28px;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.picker-preview {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--c, #40c4aa);
+  border: 4px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.picker-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.picker-label {
+  min-width: 76px;
+  font-size: 17px;
+  font-weight: bold;
+  color: #2c5237;
+}
+
+.picker-slider {
+  flex: 1;
+  height: 32px;
+  accent-color: #2e9e44;
+}
+
+.picker-row-hue .picker-slider {
+  accent-color: #e74c3c;
+}
+
+.picker-decide {
+  align-self: center;
+}
+
 /* ---------------------------------------------------------------- manage / category editor */
 
 .manage,
@@ -756,17 +807,6 @@ body {
 .swatch.mycolor {
   background: var(--c, conic-gradient(#e74c3c, #f7d51d, #2ecc71, #5bc8f5, #9b59b6, #e74c3c));
   position: relative;
-}
-
-/* タップは枠のボタン側で拾うので、重ねた input には当てない
-   （位置だけ枠に合わせておき、ピッカーはスクリプトから開く） */
-.swatch.mycolor input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
 }
 
 /* 自分で作った色だとわかるように、右下に小さな虹色パレットのアイコンを出す。
