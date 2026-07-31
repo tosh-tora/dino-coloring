@@ -8,6 +8,7 @@ import {
   saveMyColors,
 } from "./mycolors";
 import { openColorPicker } from "./colorpicker";
+import type { Level } from "./level";
 
 export const PALETTE = [
   "#e74c3c", // あか
@@ -26,6 +27,9 @@ export const PALETTE = [
 ];
 
 export const SIZES = [8, 16, 28, 46];
+
+/** レベルごとの筆の太さ初期値（SIZES の添字）。むずかしい下絵は細かいので 1段細く始める。 */
+const DEFAULT_SIZE_INDEX: Record<Level, number> = { 1: 2, 2: 2, 3: 1 };
 
 /** 長押しで発火するボタン。押している間 CSS 変数 --p (0→1) で進捗リングを描く */
 export function bindLongPress(el: HTMLElement, ms: number, onFire: () => void) {
@@ -199,7 +203,11 @@ export interface Toolbar {
   refresh(): void;
 }
 
-export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar {
+export function buildToolbar(
+  engine: PaintEngine,
+  onClear: () => void,
+  level: Level = 2
+): Toolbar {
   // ---- 左パネル: 色 ----
   const colorsEl = document.createElement("div");
   colorsEl.className = "panel colors";
@@ -346,8 +354,9 @@ export function buildToolbar(engine: PaintEngine, onClear: () => void): Toolbar 
     sizeBtns.push(btn);
     toolsEl.appendChild(btn);
   }
-  engine.setSize(SIZES[2]);
-  sizeBtns[2].classList.add("selected");
+  const sizeIdx = DEFAULT_SIZE_INDEX[level];
+  engine.setSize(SIZES[sizeIdx]);
+  sizeBtns[sizeIdx].classList.add("selected");
 
   const spacer1 = document.createElement("div");
   spacer1.className = "tool-spacer";
