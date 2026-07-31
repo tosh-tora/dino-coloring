@@ -18,6 +18,7 @@ import { cutOutSubjects, type Subject } from "./subject";
 import { playSubjects } from "./animate";
 import type { Category } from "./categories";
 import { getAutoLevels, LEVELS, LEVEL_MARK, LEVEL_NAME, type Level } from "./level";
+import { saveWorks, shareFilesSupported, SHARE_BATCH_MAX, type ExportSource } from "./export";
 
 const app = document.getElementById("app")!;
 
@@ -369,7 +370,8 @@ function showAdultMenu() {
     mkBtn("🖊️ 下絵をつくる", () => showTemplateMaker()),
     mkBtn("🗂️ ぬりえのかんり（削除・分類・レベル）", () => showManage()),
     mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor()),
-    mkBtn("⚙️ ぬりえのせってい", () => showColoringSettings())
+    mkBtn("⚙️ ぬりえのせってい", () => showColoringSettings()),
+    mkBtn("💾 さくひんを 保存する（写真・ファイルへ）", () => showSaveWorks())
   );
   app.appendChild(overlay);
 }
@@ -631,6 +633,188 @@ async function showManage() {
   box.append(heading, body);
   // 閉じたらライブラリーを更新
   box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
+  app.appendChild(overlay);
+}
+
+/** さくひんの ほぞん: 完成作品をえらんで写真アプリ／ファイルへ書き出す。 */
+async function showSaveWorks() {
+  const { overlay, box } = makeOverlay("save-works", { closeOnOutsideClick: false });
+  const items: store.GalleryItem[] = await store.getGallery().catch(() => []);
+  // id が無い記録は選択できないので最初から除く（IDB autoIncrement のため実質発生しない）
+  const withId = items.filter((it): it is store.GalleryItem & { id: number } => it.id !== undefined);
+
+  const heading = document.createElement("h1");
+  heading.className = "tm-heading";
+  heading.textContent = "💾 さくひんの ほぞん";
+  const desc = document.createElement("p");
+  desc.className = "tm-desc";
+  desc.textContent = "ほぞんしたい さくひんをえらぶと、写真アプリやファイルに書き出せます。";
+
+  const warn = document.createElement("p");
+  warn.className = "tm-desc warn";
+  warn.textContent = "この環境では 書き出しの動きが かんぜんではありません（https でひらいた本番のアプリで お試しください）";
+  warn.hidden = shareFilesSupported();
+
+  const selected = new Set<number>();
+  const cells = new Map<number, HTMLElement>();
+
+  const selectAllRow = document.createElement("div");
+  selectAllRow.className = "level-checks";
+  const selectAllLabel = document.createElement("label");
+  selectAllLabel.className = "level-check";
+  const selectAllCheck = document.createElement("input");
+  selectAllCheck.type = "checkbox";
+  const selectAllText = document.createElement("span");
+  selectAllLabel.append(selectAllCheck, selectAllText);
+  selectAllRow.appendChild(selectAllLabel);
+
+  const grid = document.createElement("div");
+  grid.className = "gallery-grid save-grid";
+
+  const foot = document.createElement("div");
+  foot.className = "save-foot";
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "tm-btn";
+  const toast = document.createElement("div");
+  toast.className = "tm-toast";
+  toast.hidden = true;
+  foot.append(saveBtn, toast);
+
+  function setCellSelected(cell: HTMLElement, on: boolean) {
+    cell.classList.toggle("selected", on);
+    const check = cell.querySelector(".gallery-check")!;
+    check.textContent = on ? "✓" : "";
+  }
+
+  function refreshControls() {
+    const n = selected.size;
+    selectAllText.textContent = `ぜんぶ えらぶ（${withId.length}こ）`;
+    selectAllCheck.checked = withId.length > 0 && n === withId.length;
+    selectAllCheck.indeterminate = n > 0 && n < withId.length;
+    if (n === 0) {
+      saveBtn.textContent = "💾 ほぞん";
+      saveBtn.classList.add("disabled");
+    } else if (n <= SHARE_BATCH_MAX) {
+      saveBtn.textContent = `💾 ${n}こ ほぞん`;
+      saveBtn.classList.remove("disabled");
+    } else {
+      saveBtn.textContent = `💾 ${SHARE_BATCH_MAX}こ ほぞん（のこり ${n - SHARE_BATCH_MAX}こ）`;
+      saveBtn.classList.remove("disabled");
+    }
+  }
+
+  function toggle(id: number) {
+    const cell = cells.get(id);
+    if (!cell) return;
+    if (selected.has(id)) {
+      selected.delete(id);
+      blip(480);
+    } else {
+      selected.add(id);
+      blip(720);
+    }
+    setCellSelected(cell, selected.has(id));
+    refreshControls();
+  }
+
+  function makeCell(item: store.GalleryItem & { id: number }): HTMLElement {
+    const cell = document.createElement("div");
+    cell.className = "gallery-item selectable";
+    const inner = document.createElement("div");
+    inner.className = "trash-inner";
+    const img = document.createElement("img");
+    img.src = item.dataUrl;
+    img.draggable = false;
+    img.loading = "lazy";
+    img.decoding = "async";
+    inner.appendChild(img);
+    const check = document.createElement("span");
+    check.className = "gallery-check";
+    cell.append(inner, check);
+    cell.addEventListener("click", () => toggle(item.id));
+    return cell;
+  }
+
+  if (withId.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "gallery-empty";
+    empty.textContent = "まだ さくひんが ないよ 🎨";
+    grid.appendChild(empty);
+    selectAllRow.hidden = true;
+    foot.hidden = true;
+  } else {
+    for (const item of withId) {
+      const cell = makeCell(item);
+      cells.set(item.id, cell);
+      grid.appendChild(cell);
+    }
+  }
+
+  selectAllCheck.addEventListener("change", () => {
+    const on = selectAllCheck.checked;
+    blip(on ? 720 : 480);
+    selected.clear();
+    if (on) for (const it of withId) selected.add(it.id);
+    for (const [id, cell] of cells) setCellSelected(cell, selected.has(id));
+    refreshControls();
+  });
+
+  saveBtn.addEventListener("click", () => {
+    if (selected.size === 0 || saveBtn.classList.contains("disabled")) return;
+    // ★ ここから saveWorks() 呼び出しまで await を挟まない
+    //   （navigator.share() はユーザー操作と同じタスクで呼ぶ必要がある）
+    const batch: ExportSource[] = [];
+    for (const it of withId) {
+      if (selected.has(it.id)) {
+        batch.push({ id: it.id, dataUrl: it.dataUrl, lineartId: it.lineartId, createdAt: it.createdAt });
+      }
+    }
+    saveBtn.classList.add("disabled");
+    toast.hidden = true;
+    const running = saveWorks(batch);
+    void running
+      .then((res) => {
+        for (const id of res.savedIds) {
+          selected.delete(id);
+          const cell = cells.get(id);
+          if (cell) setCellSelected(cell, false);
+        }
+        const skippedNote = res.skipped > 0 ? `（${res.skipped}こは よみこめませんでした）` : "";
+        switch (res.outcome.kind) {
+          case "shared":
+          case "downloaded":
+            toast.className = "tm-toast";
+            toast.textContent = `${res.outcome.count}こ ほぞんしました ✅${skippedNote}`;
+            toast.hidden = false;
+            blip(700);
+            break;
+          case "cancelled":
+            // ユーザーが共有シートを閉じただけなので、何も表示しない
+            break;
+          case "unsupported":
+            toast.className = "tm-toast warn";
+            toast.textContent = "この環境では ほぞんできません（https でひらいてください）";
+            toast.hidden = false;
+            blip(300);
+            break;
+          case "failed":
+            toast.className = "tm-toast warn";
+            toast.textContent = `ほぞんできませんでした 😢${skippedNote}`;
+            toast.hidden = false;
+            blip(300);
+            break;
+        }
+      })
+      .finally(refreshControls);
+  });
+
+  refreshControls();
+
+  const body = document.createElement("div");
+  body.className = "modal-body";
+  body.append(desc, warn, selectAllRow, grid);
+
+  box.append(heading, body, foot);
   app.appendChild(overlay);
 }
 
