@@ -209,7 +209,7 @@ async function showLibrary() {
   grid.className = "library-grid";
 
   // レベルはカードには出さない（絵を見せたいので）。絞り込みチップだけで足りる。
-  const makeCard = (art: LineArt, origin: ArtOrigin) => {
+  const makeCard = (art: LineArt, origin: ArtOrigin, level: Level) => {
     const card = document.createElement("button");
     const local = origin === "local";
     card.className = "art-card" + (local ? " custom-card" : "");
@@ -234,9 +234,9 @@ async function showLibrary() {
     card.addEventListener("click", () => {
       blip(660);
       if (workIds.has(art.id)) {
-        showResumeChooser(art);
+        showResumeChooser(art, level);
       } else {
-        showColoring(art, false);
+        showColoring(art, false, level);
       }
     });
     // ローカル下絵は長押しで削除（おとな向け操作）。押している間ゴミ箱に吸い込まれ、
@@ -271,7 +271,7 @@ async function showLibrary() {
     grid.appendChild(empty);
   }
   for (const a of visible) {
-    grid.appendChild(makeCard(a.art, a.origin));
+    grid.appendChild(makeCard(a.art, a.origin, levelOf.get(a.art.id) ?? 2));
   }
   screen.appendChild(grid);
   app.appendChild(screen);
@@ -282,7 +282,7 @@ async function showLibrary() {
 }
 
 /** 塗りかけがあるとき: つづきから / あたらしく を選ぶオーバーレイ */
-function showResumeChooser(art: LineArt) {
+function showResumeChooser(art: LineArt, level: Level) {
   const overlay = document.createElement("div");
   overlay.className = "overlay";
   const box = document.createElement("div");
@@ -294,7 +294,7 @@ function showResumeChooser(art: LineArt) {
   resumeBtn.addEventListener("click", () => {
     blip(700);
     overlay.remove();
-    showColoring(art, true);
+    showColoring(art, true, level);
   });
 
   const newBtn = document.createElement("button");
@@ -304,7 +304,7 @@ function showResumeChooser(art: LineArt) {
     blip(500);
     overlay.remove();
     await store.deleteWork(art.id).catch(() => {});
-    showColoring(art, false);
+    showColoring(art, false, level);
   });
 
   const closeBtn = document.createElement("button");
@@ -1213,7 +1213,7 @@ async function showTemplateMaker() {
 
 // ---------------------------------------------------------------- coloring
 
-async function showColoring(art: LineArt, resume: boolean) {
+async function showColoring(art: LineArt, resume: boolean, level: Level) {
   stopBgm(); // ぬりえ画面では BGM を止める
   app.innerHTML = "";
   const screen = document.createElement("div");
@@ -1276,7 +1276,7 @@ async function showColoring(art: LineArt, resume: boolean) {
     saveTimer = window.setTimeout(flushSave, 1500);
   };
 
-  const toolbar = buildToolbar(engine, () => engine.clearAll());
+  const toolbar = buildToolbar(engine, () => engine.clearAll(), level);
   // ドラッグ中は塗り/消しゴム音を継続再生する
   engine.onStrokeStart = () => startBrush(engine.getMode());
   engine.onStrokeEnd = () => {
