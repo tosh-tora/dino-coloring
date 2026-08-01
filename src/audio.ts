@@ -82,8 +82,12 @@ export function blip(freq = 660) {
   tone(ctx, freq, 0, 0.12, 0.1);
 }
 
-/** 恐竜の鳴き声。低い音を唸らせながら下げる */
-export function roar() {
+/**
+ * 恐竜の鳴き声。低い音を唸らせながら下げる。
+ * pitch は音程の倍率で、呼び出し側がシルエットの大きさから決める（大きい生き物ほど低い）。
+ * 引数なしの呼び出しは pitch=1 でこれまでと同じ音になる。
+ */
+export function roar(pitch = 1) {
   if (muted) return;
   const ctx = getAudio();
   if (!ctx) return;
@@ -91,14 +95,14 @@ export function roar() {
 
   const osc = ctx.createOscillator();
   osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(190, t);
-  osc.frequency.exponentialRampToValueAtTime(70, t + 0.55);
+  osc.frequency.setValueAtTime(190 * pitch, t);
+  osc.frequency.exponentialRampToValueAtTime(70 * pitch, t + 0.55);
 
   // 低めに絞って「ガオー」の丸みを出す
   const filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
-  filter.frequency.setValueAtTime(1000, t);
-  filter.frequency.exponentialRampToValueAtTime(300, t + 0.55);
+  filter.frequency.setValueAtTime(1000 * pitch, t);
+  filter.frequency.exponentialRampToValueAtTime(300 * pitch, t + 0.55);
 
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0, t);
@@ -117,6 +121,74 @@ export function roar() {
   lfo.start(t);
   osc.stop(t + 0.65);
   lfo.stop(t + 0.65);
+}
+
+/** とぶ生き物の「キーッ」。高い音を一度上げてから落とす短い声 */
+export function screech(pitch = 1) {
+  if (muted) return;
+  const ctx = getAudio();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(880 * pitch, t);
+  osc.frequency.exponentialRampToValueAtTime(1500 * pitch, t + 0.09);
+  osc.frequency.exponentialRampToValueAtTime(700 * pitch, t + 0.36);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.16, t + 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+  // 細かい震え。まっすぐな電子音にせず鳥の声に寄せる
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  lfo.frequency.value = 26;
+  lfoGain.gain.value = 40 * pitch;
+  lfo.connect(lfoGain).connect(osc.frequency);
+
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t);
+  lfo.start(t);
+  osc.stop(t + 0.45);
+  lfo.stop(t + 0.45);
+}
+
+/** およぐ生き物の「ぽちゃん」。落ちるサイン波 + 短いしぶき */
+export function splash(pitch = 1) {
+  if (muted) return;
+  const ctx = getAudio();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+
+  // 泡の芯。高い音から一気に落として「ぽちゃん」の丸みを出す
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(760 * pitch, t);
+  osc.frequency.exponentialRampToValueAtTime(180 * pitch, t + 0.18);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  osc.connect(gain).connect(ctx.destination);
+
+  // しぶき。継続ブラシ音と同じホワイトノイズを短く借りる
+  const noise = ctx.createBufferSource();
+  noise.buffer = getNoiseBuffer(ctx);
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = "highpass";
+  noiseFilter.frequency.value = 1200;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.09, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+  noise.connect(noiseFilter).connect(noiseGain).connect(ctx.destination);
+
+  osc.start(t);
+  noise.start(t);
+  osc.stop(t + 0.35);
+  noise.stop(t + 0.2);
 }
 
 // ---------------------------------------------------------------- BGM

@@ -15,7 +15,7 @@ import {
 } from "./template";
 import { loadSharedArts, warmSharedArts } from "./shared";
 import { cutOutSubjects, type Subject } from "./subject";
-import { playSubjects } from "./animate";
+import { playSubjects, motionOf } from "./animate";
 import type { Category } from "./categories";
 import { getAutoLevels, LEVELS, LEVEL_MARK, LEVEL_NAME, type Level } from "./level";
 import { saveWorks, shareFilesSupported, SHARE_BATCH_MAX, type ExportSource } from "./export";
@@ -1307,6 +1307,79 @@ type ColoringStart =
   /** 完成作品を塗り直す。「できた！」でこの作品を上書きする */
   | { kind: "reedit"; item: store.GalleryItem };
 
+/** むしめがねの倍率 */
+const ZOOM = 2;
+
+/**
+ * むしめがね: 紙の一部を大きくして、細かいところを塗れるようにする。
+ *
+ * 拡大は .stage-inner への CSS transform だけで行う。PaintEngine の座標変換は
+ * canvas の getBoundingClientRect() 基準（＝祖先の transform が反映された矩形）なので、
+ * **塗り側のコードを一切変えずに指の位置と線が合う**。canvas の実体は等倍のままなので、
+ * はみだしガード・バケツ・もどす・「できた！」の合成もそのまま効く。
+ * canvas を実際に拡大する実装に書き換えないこと。
+ */
+function setupZoom(btn: HTMLButtonElement, stage: HTMLElement, inner: HTMLElement) {
+  let zoomed = false;
+  let pick: HTMLElement | null = null;
+
+  const render = () => {
+    btn.textContent = zoomed ? "🔎" : "🔍";
+    btn.classList.toggle("selected", zoomed || pick !== null);
+    btn.title = zoomed ? "もとの おおきさに もどす" : "おおきくする";
+  };
+  render();
+
+  const closePick = () => {
+    pick?.remove();
+    pick = null;
+  };
+
+  btn.addEventListener("click", () => {
+    // 場所を選んでいる最中にもう一度押されたら、選ぶのをやめる
+    if (pick) {
+      blip(420);
+      closePick();
+      render();
+      return;
+    }
+    if (zoomed) {
+      blip(500);
+      zoomed = false;
+      inner.style.transform = "";
+      inner.style.transformOrigin = "";
+      render();
+      return;
+    }
+
+    // 拡大したい場所を 1 回タップしてもらう。その間だけ紙の前面に透明な板を置くので、
+    // 選ぶためのタップが塗りレイヤーに届かない（線が引かれてしまわない）
+    blip(720);
+    const el = document.createElement("div");
+    el.className = "zoom-pick";
+    const label = document.createElement("span");
+    label.className = "zoom-pick-label";
+    label.textContent = "おおきくしたい ところを タップしてね";
+    el.appendChild(label);
+    el.addEventListener("pointerdown", (e) => {
+      const rect = el.getBoundingClientRect();
+      const px = ((e.clientX - rect.left) / rect.width) * 100;
+      const py = ((e.clientY - rect.top) / rect.height) * 100;
+      // タップした点を動かさずに広げるので、紙の外の余白が見えることは起こらない
+      // （＝はみ出しを抑えるためのクランプ計算が要らない）
+      inner.style.transformOrigin = `${px}% ${py}%`;
+      inner.style.transform = `scale(${ZOOM})`;
+      zoomed = true;
+      closePick();
+      render();
+      blip(880);
+    });
+    pick = el;
+    stage.appendChild(el);
+    render();
+  });
+}
+
 async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   // 塗り直しは「完成作品を直す」ので、下絵ごとに 1 つしかない塗りかけ (works) には
   // 触らない。別の絵の塗りかけを巻き添えで潰さないため（そのぶん「できた！」を
@@ -1326,10 +1399,12 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   const artTitle = document.createElement("span");
   artTitle.className = "art-title";
   artTitle.textContent = art.name;
+  const zoomBtn = document.createElement("button");
+  zoomBtn.className = "nav-btn zoom-btn";
   const doneBtn = document.createElement("button");
   doneBtn.className = "nav-btn done-btn";
   doneBtn.textContent = "🎉 できた！";
-  header.append(backBtn, artTitle, makeMuteButton(), doneBtn);
+  header.append(backBtn, artTitle, zoomBtn, makeMuteButton(), doneBtn);
   screen.appendChild(header);
 
   // ---- 中央: 2 レイヤー canvas ----
@@ -1340,6 +1415,10 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   stageWrap.className = "stage-wrap";
   const stage = document.createElement("div");
   stage.className = "stage";
+  // 拡大するのはこの内側だけ。紙 (.stage) の大きさと overflow:hidden は据え置きで、
+  // はみ出したぶんが切り取られる
+  const stageInner = document.createElement("div");
+  stageInner.className = "stage-inner";
   const paintCanvas = document.createElement("canvas");
   paintCanvas.className = "paint-layer";
   paintCanvas.width = CANVAS_W;
@@ -1348,8 +1427,10 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   lineartCanvas.className = "lineart-layer";
   lineartCanvas.width = CANVAS_W;
   lineartCanvas.height = CANVAS_H;
-  stage.append(paintCanvas, lineartCanvas);
+  stageInner.append(paintCanvas, lineartCanvas);
+  stage.appendChild(stageInner);
   stageWrap.appendChild(stage);
+  setupZoom(zoomBtn, stage, stageInner);
 
   const engine = new PaintEngine(paintCanvas);
   engine.setGuardThreshold(loadGuardThreshold());
@@ -1466,7 +1547,7 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
     await celebrate();
     // 主役をきれいに切り出せた下絵だけ「うごかす」演出へ進む
     const subjects = await cutting;
-    if (subjects.length > 0) await playSubjects(composite, subjects);
+    if (subjects.length > 0) await playSubjects(composite, subjects, { motion: motionOf(art) });
     showGallery();
   });
 }
@@ -1687,6 +1768,7 @@ async function showGallery() {
     // 下絵が無いと線画を描き直せない＝塗り直せないので、そのときはボタンを出さない
     await playSubjects(img, subjects, {
       onMore: entry ? () => void reeditWork(item, entry) : undefined,
+      motion: entry ? motionOf(entry.art, entry.category) : undefined,
     });
   }
 
