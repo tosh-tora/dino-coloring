@@ -39,12 +39,6 @@ const MIN_AREA_RATIO = 0.08;
 const MAX_AREA_RATIO = 0.55;
 /** 塗りつぶしがこの割合を超えたら輪郭が閉じていない（漏れた）と判断して捨てる */
 const LEAK_AREA_RATIO = 0.6;
-/**
- * 画像の縁に接している辺の数がこれを超えたら背景を巻き込んだとみなす。
- * 生き物は画面内に収まって描かれるが、地面・草・空は画面外へ流れ出ていくため、
- * 「3辺以上に接する」ことが背景混入のよい目印になる。
- */
-const MAX_BORDER_SIDES = 2;
 /** シルエットの充填率（面積 / 外接矩形）。これ未満はバラけすぎ＝主役ではない */
 const MIN_SOLIDITY = 0.25;
 /**
@@ -261,6 +255,38 @@ function fillInterior(
 }
 
 /**
+ * 左右で完結していない（画面の外へ続いている）区画のうち、いちばん大きいものの面積。
+ *
+ * 「対決」の絵などでは、恐竜が画面いっぱいに描かれて胴やしっぽが画面の外へ切れている
+ * ことがある。切れた生き物の内側は画像の縁と地続きなので、輪郭の内側を塗る方式では
+ * シルエットにならず、代わりに背びれのような「体の一部」だけが閉じた区画として残る。
+ * それを動かすと体の一部が本体から剥がれて跳ねてしまうので、呼び出し側は「切り抜けた
+ * 主役より大きい区画が画面の外へ続いている」なら、その絵では演出を諦める。
+ *
+ * 数え方は、輪郭で仕切った紙の区画のうち「画像の一辺だけ、それも左右どちらかに接して
+ * いるもの」。空や地面は画面の外へ流れ出ていくので複数の辺にまたがり（水面のような
+ * 横帯なら左右の両方に接する）、切れた生き物の胴だけがこの条件に当たる。
+ */
+function clippedArea(joined: Uint8Array, w: number, h: number, r: number): number {
+  const grown = dilate(joined, w, h, r);
+  const paper = new Uint8Array(w * h);
+  for (let i = 0; i < paper.length; i++) paper[i] = grown[i] === 0 ? 1 : 0;
+
+  let max = 0;
+  for (const comp of connectedComponents(paper, w, h)) {
+    if (comp.pixels.length <= max) continue;
+    const sides =
+      (comp.minX === 0 ? 1 : 0) +
+      (comp.maxX === w - 1 ? 1 : 0) +
+      (comp.minY === 0 ? 1 : 0) +
+      (comp.maxY === h - 1 ? 1 : 0);
+    if (sides !== 1 || (comp.minX !== 0 && comp.maxX !== w - 1)) continue;
+    max = comp.pixels.length;
+  }
+  return max;
+}
+
+/**
  * シルエットを細いくびれで切り分ける。
  *
  * 開く（＝細い橋を断ち切る）と、触れているだけの背景も、隣り合って立っている 2 体目も
@@ -312,13 +338,10 @@ function measure(mask: Uint8Array, w: number, h: number): SubjectMask | null {
   if (area < w * h * MIN_AREA_RATIO || area > w * h * MAX_AREA_RATIO) return null;
   if (area < bw * bh * MIN_SOLIDITY) return null;
 
-  // 画像の縁に接している辺を数える（3辺以上なら地面や草を巻き込んでいる）
-  let sides = 0;
-  for (let x = 0; x < w; x++) if (mask[x] === 1) { sides++; break; }
-  for (let x = 0; x < w; x++) if (mask[(h - 1) * w + x] === 1) { sides++; break; }
-  for (let y = 0; y < h; y++) if (mask[y * w] === 1) { sides++; break; }
-  for (let y = 0; y < h; y++) if (mask[y * w + w - 1] === 1) { sides++; break; }
-  if (sides > MAX_BORDER_SIDES) return null;
+  // 左右の縁に触れているシルエットは、そこで切れている＝生き物が画面に収まっていない。
+  // 足が地面（下の縁）に着くのは普通なので、左右だけを落とす
+  for (let y = 0; y < h; y++) if (mask[y * w] === 1) return null;
+  for (let y = 0; y < h; y++) if (mask[y * w + w - 1] === 1) return null;
 
   return { mask, x: minX, y: minY, w: bw, h: bh, area, confidence: 0 };
 }
@@ -348,6 +371,12 @@ function outlineCoverage(
   return edge === 0 ? 0 : on / edge;
 }
 
+interface Extraction {
+  subjects: SubjectMask[];
+  /** 画面の外へ続いている、いちばん大きい区画の面積 (px) */
+  clipped: number;
+}
+
 /** 太線マスクとすき間埋め半径を決め打ちして主役候補を取り出す */
 function extractWithRadii(
   thick: Uint8Array,
@@ -355,17 +384,17 @@ function extractWithRadii(
   w: number,
   h: number,
   cr: number
-): SubjectMask[] {
+): Extraction {
   // 手前の草などに隠れて輪郭は途切れがちなので、クロージングで近い断片を繋ぐ。
   // 断片ごとに塗りつぶすと必ず漏れるため、繋いでから一括で内側を塗る。
   const joined = erode(dilate(thick, w, h, cr), w, h, cr);
 
   const filled = fillInterior(joined, w, h, cr);
-  if (!filled) return [];
+  if (!filled) return { subjects: [], clipped: 0 };
 
   // 塗り終えたシルエットを個体ごとに分ける（対決絵なら 2 体に分かれる）
   const comps = connectedComponents(filled, w, h);
-  if (comps.length === 0) return [];
+  if (comps.length === 0) return { subjects: [], clipped: 0 };
   comps.sort((a, b) => b.pixels.length - a.pixels.length);
   const minArea = comps[0].pixels.length * SECONDARY_RATIO;
 
@@ -383,7 +412,8 @@ function extractWithRadii(
     }
   }
   out.sort((a, b) => b.area - a.area);
-  return out;
+  // 候補が無い組み合わせでは、画面の外へ続く区画を数えても使い道が無い
+  return { subjects: out, clipped: out.length === 0 ? 0 : clippedArea(joined, w, h, cr) };
 }
 
 /** 面積で重み付けした平均一致率。半径の組み合わせ同士を比べるためのスコア */
@@ -398,11 +428,25 @@ function setScore(subjects: SubjectMask[]): number {
 }
 
 /**
+ * 切り抜けた主役より大きいものが画面の外へ続いているか。
+ * そうなら、この絵の本当の主役は画面に収まっていない（＝切り抜けたのは体の一部）。
+ */
+function missesClippedSubject(found: Extraction): boolean {
+  let area = 0;
+  for (const s of found.subjects) area += s.area;
+  return found.clipped > area;
+}
+
+/**
  * 線画のアルファチャンネルから主役のシルエットを取り出す。
  * 面積の大きい順に返す（対決絵などで 2 体見つかることがある）。見つからなければ空配列。
  *
  * 収縮半径（背景の細線をどこまで落とすか）とすき間埋め半径（途切れた輪郭をどこまで繋ぐか）
  * の最適値は絵ごとに違うため、総当たりして輪郭一致率が最も高い組み合わせを採用する。
+ *
+ * 画面の外へ切れている生き物が写っている絵では、何も返さない。切れた生き物は
+ * シルエットにできず、代わりに体の一部だけがきれいな閉領域として残ってしまうため
+ * （clippedArea を参照）。
  */
 export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): SubjectMask[] {
   const ink = new Uint8Array(w * h);
@@ -420,14 +464,18 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
 
     for (const crBase of CLOSE_RADII) {
       const found = extractWithRadii(thick, nearThick, w, h, scaleR(crBase, w));
-      if (found.length === 0) continue;
-      const score = setScore(found);
+      if (found.subjects.length === 0) continue;
+      // いちばんよく取れた組み合わせが「主役より大きいものが画面の外へ続いている」と
+      // 言っているなら、切り抜けたのは体の一部。半径を変えて探し直しても本体は出て
+      // こない（画面の外にあるので）ため、この絵は諦める
+      if (missesClippedSubject(found)) return [];
+      const score = setScore(found.subjects);
       if (score > bestScore) {
         bestScore = score;
-        best = found;
+        best = found.subjects;
       }
       // 十分きれいに取れたら、これ以上半径を上げて歪ませる必要はない
-      if (score >= GOOD_COVERAGE) return found;
+      if (score >= GOOD_COVERAGE) return found.subjects;
     }
   }
   return best;
