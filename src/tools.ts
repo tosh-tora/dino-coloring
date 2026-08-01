@@ -30,6 +30,18 @@ export const SIZES = [8, 16, 28, 46];
 /** レベルごとの筆の太さ初期値（SIZES の添字）。むずかしい下絵は細かいので 1段細く始める。 */
 const DEFAULT_SIZE_INDEX: Record<Level, number> = { 1: 2, 2: 2, 3: 1 };
 
+/** ぬり方の選択。fill だけは道具（バケツ）で、おとなメニューで有効化したときだけ出る */
+type ToolMode = "normal" | "mix" | "fill";
+
+const MODE_TITLE: Record<ToolMode, string> = {
+  normal: "うわがき",
+  mix: "まぜまぜ",
+  fill: "ぬりつぶし",
+};
+/** タップしたときに一瞬出るポップアップの文言（子ども向けの呼び名） */
+const MODE_POP: Record<ToolMode, string> = { normal: "くれよん", mix: "えのぐ", fill: "ペンキ" };
+const MODE_BLIP: Record<ToolMode, number> = { normal: 560, mix: 740, fill: 640 };
+
 /** 長押しで発火するボタン。押している間 CSS 変数 --p (0→1) で進捗リングを描く */
 export function bindLongPress(el: HTMLElement, ms: number, onFire: () => void) {
   let timer: number | null = null;
@@ -202,16 +214,33 @@ export interface Toolbar {
   refresh(): void;
 }
 
+export interface ToolbarOptions {
+  level?: Level;
+  /** ペンキ（ぬりつぶし）をモード切替に含めるか。おとなメニューの設定 */
+  fillEnabled?: boolean;
+}
+
 export function buildToolbar(
   engine: PaintEngine,
   onClear: () => void,
-  level: Level = 2
+  opts: ToolbarOptions = {}
 ): Toolbar {
+  const level = opts.level ?? 2;
+
   // ---- 左パネル: 色 ----
   const colorsEl = document.createElement("div");
   colorsEl.className = "panel colors";
 
-  let overlayMode: "normal" | "mix" = "normal";
+  // ペンキがオフなら、いままで通り くれよん ↔ えのぐ の 2 段のまま
+  const cycle: ToolMode[] = opts.fillEnabled ? ["normal", "mix", "fill"] : ["normal", "mix"];
+  let overlayMode: ToolMode = "normal";
+
+  /** overlayMode をエンジンに反映する。keepErase なら消しゴム中は消しゴムのまま */
+  const applyToolMode = (keepErase: boolean) => {
+    engine.setFillTool(overlayMode === "fill");
+    if (keepErase && engine.getMode() === "erase") return;
+    engine.setMode(overlayMode === "mix" ? "mix" : "normal");
+  };
 
   const swatches: HTMLButtonElement[] = [];
   const selectSwatch = (btn: HTMLButtonElement) => {
@@ -225,7 +254,7 @@ export function buildToolbar(
     btn.style.setProperty("--c", color);
     btn.addEventListener("click", () => {
       engine.setColor(color);
-      engine.setMode(overlayMode);
+      applyToolMode(false);
       selectSwatch(btn);
       blip(520);
     });
@@ -290,7 +319,7 @@ export function buildToolbar(
       const color = myColors[i];
       if (!color) return;
       engine.setColor(color);
-      engine.setMode(overlayMode);
+      applyToolMode(false);
       selectSwatch(btn);
       blip(520);
     });
@@ -300,7 +329,7 @@ export function buildToolbar(
       myColors[i] = input.value.toLowerCase();
       render();
       engine.setColor(input.value);
-      engine.setMode(overlayMode);
+      applyToolMode(false);
       selectSwatch(btn);
     });
     // 確定でもキャンセルでも、画面に見えている色をそのまま保存する。iOS のピッカーには
@@ -380,7 +409,7 @@ export function buildToolbar(
   spacer1.className = "tool-spacer";
   toolsEl.appendChild(spacer1);
 
-  // 重ね塗りモードトグル（うわがき 🖍️ / まぜまぜ = 水彩筆の自作SVG）
+  // ぬり方トグル（うわがき 🖍️ / まぜまぜ = 水彩筆の自作SVG / ぬりつぶし 🪣）
   const modeWrap = document.createElement("div");
   modeWrap.className = "mode-wrap";
   const modeBtn = document.createElement("button");
@@ -406,28 +435,28 @@ export function buildToolbar(
       </g>
     </svg>`;
   const renderMode = () => {
-    if (overlayMode === "normal") {
-      modeBtn.textContent = "🖍️";
-    } else {
+    if (overlayMode === "mix") {
       modeBtn.innerHTML = brushSvg;
+    } else {
+      modeBtn.textContent = overlayMode === "fill" ? "🪣" : "🖍️";
     }
-    modeBtn.title = overlayMode === "normal" ? "うわがき" : "まぜまぜ";
+    modeBtn.title = MODE_TITLE[overlayMode];
   };
   renderMode();
   // タップした瞬間「えのぐ」「くれよん」と一瞬ポップアップして、いま何色モードに
   // 切り替わったのかを子どもにもわかるようにする
   const showModeLabel = () => {
-    modeLabel.textContent = overlayMode === "normal" ? "くれよん" : "えのぐ";
+    modeLabel.textContent = MODE_POP[overlayMode];
     modeLabel.classList.remove("show");
     void modeLabel.offsetWidth; // 連打時にアニメーションを最初から再生させるためのリフロー
     modeLabel.classList.add("show");
   };
   modeBtn.addEventListener("click", () => {
-    overlayMode = overlayMode === "normal" ? "mix" : "normal";
-    if (engine.getMode() !== "erase") engine.setMode(overlayMode);
+    overlayMode = cycle[(cycle.indexOf(overlayMode) + 1) % cycle.length];
+    applyToolMode(true);
     renderMode();
     showModeLabel();
-    blip(overlayMode === "mix" ? 740 : 560);
+    blip(MODE_BLIP[overlayMode]);
   });
   modeWrap.appendChild(modeBtn);
   modeWrap.appendChild(modeLabel);

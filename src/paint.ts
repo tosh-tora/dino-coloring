@@ -31,6 +31,9 @@ export class PaintEngine {
   private color = "#e74c3c";
   private size = 26;
   private mode: PaintMode = "normal";
+  /** ペンキ（ぬりつぶし）ツールが有効か。mode とは独立の軸で、
+   *  消しゴムと組み合わせると「領域まるごと消し」になる */
+  private fillTool = false;
 
   private activePointer: number | null = null;
   private points: { x: number; y: number }[] = [];
@@ -59,6 +62,8 @@ export class PaintEngine {
 
   onStrokeStart: (() => void) | null = null;
   onStrokeEnd: (() => void) | null = null;
+  /** ペンキで実際に塗りつぶせたときに呼ぶ（効果音は呼び元にまかせる） */
+  onFill: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -95,6 +100,10 @@ export class PaintEngine {
   getMode(): PaintMode {
     return this.mode;
   }
+  /** ペンキ（ぬりつぶし）ツールの ON/OFF */
+  setFillTool(on: boolean) {
+    this.fillTool = on;
+  }
   /** 線画レイヤーを渡すと、はみだしガード用の障壁マップを作る（塗りと同サイズ前提） */
   setLineart(lineartCanvas: HTMLCanvasElement) {
     const w = this.canvas.width;
@@ -125,6 +134,15 @@ export class PaintEngine {
   private onDown = (e: PointerEvent) => {
     // 2 本目以降の指は無視（簡易パーム対策）
     if (this.activePointer !== null) return;
+
+    // ペンキ: タップした瞬間に閉領域を塗りつぶす。ストローク状態は一切持たない
+    if (this.fillTool) {
+      if (!this.fillRegion(this.toCanvasPos(e))) return;
+      this.onFill?.();
+      this.onStrokeEnd?.();
+      return;
+    }
+
     this.activePointer = e.pointerId;
     try {
       this.canvas.setPointerCapture(e.pointerId);
@@ -173,15 +191,13 @@ export class PaintEngine {
 
   // ---------------------------------------------------------------- guard
 
-  /** ストローク開始: 開始位置を含む閉領域をフラッドフィルして塗り許可マスクにする */
-  private beginMask(pos: { x: number; y: number }) {
-    this.mask = null;
-    this.lastInside = null;
-    if (this.guardThreshold <= 0 || !this.barrier || this.mode === "erase") return;
+  /** pos を含む閉領域をフラッドフィルして mask / maskCanvas を作る。
+   *  作れたら seed の index、周囲がすべて線などで作れなければ -1 を返す。 */
+  private buildRegionMask(pos: { x: number; y: number }): number {
     const w = this.canvas.width;
     const h = this.canvas.height;
     const seed = this.findFreeSeed(Math.round(pos.x), Math.round(pos.y));
-    if (seed < 0) return; // 周囲がすべて線: このストロークはガードなしで塗る
+    if (seed < 0) return -1;
     if (!this.maskBuf) this.maskBuf = new Uint8Array(w * h);
     else this.maskBuf.fill(0);
     if (!this.maskData) this.maskData = this.maskCtx.createImageData(w, h);
@@ -189,7 +205,69 @@ export class PaintEngine {
     this.mask = this.maskBuf;
     this.flood(seed);
     this.maskCtx.putImageData(this.maskData, 0, 0);
+    return seed;
+  }
+
+  /** ストローク開始: 開始位置を含む閉領域をフラッドフィルして塗り許可マスクにする */
+  private beginMask(pos: { x: number; y: number }) {
+    this.mask = null;
+    this.lastInside = null;
+    if (this.guardThreshold <= 0 || !this.barrier || this.mode === "erase") return;
+    const seed = this.buildRegionMask(pos);
+    if (seed < 0) return; // 周囲がすべて線: このストロークはガードなしで塗る
+    const w = this.canvas.width;
     this.lastInside = { x: seed % w, y: Math.floor(seed / w) };
+  }
+
+  /** ペンキ: pos を含む閉領域を一発で塗りつぶす（消しゴム中なら一発で消す）。
+   *  ガード設定とは無関係に、線画の barrier があるときだけ効く。 */
+  private fillRegion(pos: { x: number; y: number }): boolean {
+    if (!this.barrier) return false; // 線画が読めていない: 塗りつぶす境界がない
+    if (this.buildRegionMask(pos) < 0) return false;
+    this.mask = null; // ストローク用の状態としては持ち越さない
+
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    // undo 用に現状態を退避
+    const snap = document.createElement("canvas");
+    snap.width = w;
+    snap.height = h;
+    snap.getContext("2d")!.drawImage(this.canvas, 0, 0);
+
+    // 領域ぶんのベタ塗りを strokeBuf に作る
+    const s = this.strokeCtx;
+    s.clearRect(0, 0, this.strokeBuf.width, this.strokeBuf.height);
+    s.fillStyle = this.mode === "erase" ? "#000" : this.color;
+    s.fillRect(0, 0, w, h);
+    s.globalCompositeOperation = "destination-in";
+    s.drawImage(this.maskCanvas, 0, 0);
+    s.globalCompositeOperation = "source-over";
+
+    this.compositeStroke();
+
+    this.pushUndo(snap);
+    return true;
+  }
+
+  /** strokeBuf をいまのモードで本 canvas に合成する（なぞり描きとペンキで共通） */
+  private compositeStroke() {
+    const ctx = this.ctx;
+    if (this.mode === "mix") {
+      // 水彩の上塗り: 下の色と新しい色を MIX_RATIO で混ぜる。
+      // 1) 半透明で重ねる = すでに色がある所は加重平均になる（白を塗れば白へ寄る）
+      ctx.globalAlpha = MIX_RATIO;
+      ctx.drawImage(this.strokeBuf, 0, 0);
+      ctx.globalAlpha = 1;
+      // 2) 同じ色を destination-over で裏に敷き、まだ塗っていない所だけ不透明に埋める
+      //    （すでに不透明な所には効かないので 1) の混色はそのまま残る）
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.drawImage(this.strokeBuf, 0, 0);
+    } else {
+      ctx.globalCompositeOperation = this.mode === "erase" ? "destination-out" : "source-over";
+      ctx.drawImage(this.strokeBuf, 0, 0);
+    }
+    ctx.globalCompositeOperation = "source-over";
   }
 
   /** ガード中の点を処理: マスク内なら基準点を更新。閾値を超えて別領域へ抜けたら
@@ -353,21 +431,7 @@ export class PaintEngine {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (this.preStroke) ctx.drawImage(this.preStroke, 0, 0);
-    if (this.mode === "mix") {
-      // 水彩の上塗り: 下の色と新しい色を MIX_RATIO で混ぜる。
-      // 1) 半透明で重ねる = すでに色がある所は加重平均になる（白を塗れば白へ寄る）
-      ctx.globalAlpha = MIX_RATIO;
-      ctx.drawImage(this.strokeBuf, 0, 0);
-      ctx.globalAlpha = 1;
-      // 2) 同じ色を destination-over で裏に敷き、まだ塗っていない所だけ不透明に埋める
-      //    （すでに不透明な所には効かないので 1) の混色はそのまま残る）
-      ctx.globalCompositeOperation = "destination-over";
-      ctx.drawImage(this.strokeBuf, 0, 0);
-    } else {
-      ctx.globalCompositeOperation = this.mode === "erase" ? "destination-out" : "source-over";
-      ctx.drawImage(this.strokeBuf, 0, 0);
-    }
-    ctx.globalCompositeOperation = "source-over";
+    this.compositeStroke();
   }
 
   undo() {

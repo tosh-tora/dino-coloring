@@ -427,7 +427,26 @@ function saveGuardThreshold(v: number) {
   }
 }
 
-/** ぬりえのせってい: はみだしガードの閾値と、子どもに見せるレベルを設定する。 */
+const FILL_KEY = "dino-coloring:fill-tool";
+
+/** ペンキ（ぬりつぶし）を使えるようにするか。既定はオフ（おとなが明示的に有効化する） */
+function loadFillEnabled(): boolean {
+  try {
+    return localStorage.getItem(FILL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveFillEnabled(v: boolean) {
+  try {
+    localStorage.setItem(FILL_KEY, v ? "1" : "0");
+  } catch {
+    // 保存できなくても今回のセッション内では効かせられる
+  }
+}
+
+/** ぬりえのせってい: はみだしガードの閾値・ペンキの有無・子どもに見せるレベル。 */
 function showColoringSettings() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
@@ -464,6 +483,31 @@ function showColoringSettings() {
     render();
   });
   row.append(slider, value);
+
+  // ---- ペンキ（ぬりつぶし）----
+  const fillSub = document.createElement("h2");
+  fillSub.className = "guard-sub";
+  fillSub.textContent = "ペンキ（ぬりつぶし）";
+  const fillDesc = document.createElement("p");
+  fillDesc.className = "tm-desc";
+  fillDesc.textContent =
+    "タップした囲まれた場所を 一発でぬりつぶします。かんたんに仕上がるぶん、手で塗る練習にはなりません。オンにすると ぬりえ画面の くれよん／えのぐ の切り替えに 🪣 が増えます。";
+
+  const fillRow = document.createElement("div");
+  fillRow.className = "level-checks";
+  const fillLabel = document.createElement("label");
+  fillLabel.className = "level-check";
+  const fillCheck = document.createElement("input");
+  fillCheck.type = "checkbox";
+  fillCheck.checked = loadFillEnabled();
+  const fillText = document.createElement("span");
+  fillText.textContent = "🪣 ペンキを つかえるようにする";
+  fillCheck.addEventListener("change", () => {
+    saveFillEnabled(fillCheck.checked);
+    blip(fillCheck.checked ? 620 : 380);
+  });
+  fillLabel.append(fillCheck, fillText);
+  fillRow.appendChild(fillLabel);
 
   // ---- 見せるレベル（親の強制フィルター）----
   const lvSub = document.createElement("h2");
@@ -503,9 +547,10 @@ function showColoringSettings() {
 
   const foot = document.createElement("p");
   foot.className = "tm-desc";
-  foot.textContent = "せっていは この端末に保存され、次にひらいたときも 有効です。";
+  foot.textContent =
+    "せっていは この端末に保存され、次にひらいたときも 有効です。ぬりえ画面をひらき直すと反映されます。";
 
-  box.append(heading, sub, desc, row, lvSub, lvDesc, lvRow, foot);
+  box.append(heading, sub, desc, row, fillSub, fillDesc, fillRow, lvSub, lvDesc, lvRow, foot);
   // 閉じたらライブラリーを更新（見せるレベルの変更を反映する）
   box.querySelector(".chooser-close")!.addEventListener("click", () => showLibrary());
   app.appendChild(overlay);
@@ -1318,9 +1363,14 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
     saveTimer = window.setTimeout(flushSave, 1500);
   };
 
-  const toolbar = buildToolbar(engine, () => engine.clearAll(), level);
+  const toolbar = buildToolbar(engine, () => engine.clearAll(), {
+    level,
+    fillEnabled: loadFillEnabled(),
+  });
   // ドラッグ中は塗り/消しゴム音を継続再生する
   engine.onStrokeStart = () => startBrush(engine.getMode());
+  // ペンキは一瞬で終わるので継続音ではなく単発の音
+  engine.onFill = () => blip(620);
   engine.onStrokeEnd = () => {
     stopBrush();
     toolbar.refresh();
