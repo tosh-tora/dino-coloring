@@ -42,6 +42,50 @@ const MODE_TITLE: Record<ToolMode, string> = {
 const MODE_POP: Record<ToolMode, string> = { normal: "くれよん", mix: "えのぐ", fill: "バケツ" };
 const MODE_BLIP: Record<ToolMode, number> = { normal: 560, mix: 740, fill: 640 };
 
+let bucketSvgSeq = 0;
+
+/**
+ * バケツのアイコン: 傾いたブリキのバケツから赤いペンキがあふれ出ている絵。
+ * 手前に流れを見せたいので、胴 → 口 の順に描いたあと最後にペンキを重ねる。
+ *
+ * 同じページに 2 つ以上置いても混ざらないよう、グラデーションの id は呼ぶたびに
+ * 変える（ツールバーのボタンと、おとなメニューの説明文で同時に使う）。
+ */
+export function bucketSvg(): string {
+  const id = `bkt-body-${++bucketSvgSeq}`;
+  return `
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <linearGradient id="${id}" x1="0.1" y1="0" x2="0.9" y2="1">
+          <stop offset="0" stop-color="#b3bac2" />
+          <stop offset="0.28" stop-color="#fbfcfd" />
+          <stop offset="0.55" stop-color="#c3c9d0" />
+          <stop offset="1" stop-color="#878f98" />
+        </linearGradient>
+      </defs>
+      <g transform="translate(32 32) scale(1.07) translate(-32 -32)">
+        <g transform="translate(4 1) rotate(-52 38 34)">
+          <path d="M50 23 C61 26 61 42 50 45" fill="none" stroke="#5b6570"
+                stroke-width="2.6" stroke-linecap="round" />
+          <path d="M24.5 18 L27.5 48 A10.5 4 0 0 0 48.5 48 L51.5 18 A13.5 5 0 0 1 24.5 18 Z"
+                fill="url(#${id})" stroke="#5b6570" stroke-width="2.6" stroke-linejoin="round" />
+          <path d="M32 24 L34.2 45" fill="none" stroke="#ffffff"
+                stroke-width="3" stroke-linecap="round" opacity="0.6" />
+          <ellipse cx="38" cy="18" rx="13.5" ry="5"
+                   fill="#7f888f" stroke="#5b6570" stroke-width="2.6" />
+          <ellipse cx="38" cy="18.4" rx="9.6" ry="2.9" fill="#69727a" />
+          <circle cx="50.5" cy="24" r="3" fill="#e4e8ec" stroke="#5b6570" stroke-width="2.2" />
+        </g>
+        <path d="M19.5 29 C13.5 31.5 10 35.5 10 41 L10 49.5
+                 A5.2 5.2 0 0 0 20.4 49.5 L20.4 43
+                 C20.4 39.5 23 37 26.5 36 Z"
+              fill="#c40f22" stroke="#7a0713" stroke-width="2.3" stroke-linejoin="round" />
+        <path d="M22 33 C16.5 36 14 39.5 14 44" fill="none" stroke="#ef5568"
+              stroke-width="3" stroke-linecap="round" opacity="0.85" />
+      </g>
+    </svg>`;
+}
+
 /** 長押しで発火するボタン。押している間 CSS 変数 --p (0→1) で進捗リングを描く */
 export function bindLongPress(el: HTMLElement, ms: number, onFire: () => void) {
   let timer: number | null = null;
@@ -434,44 +478,11 @@ export function buildToolbar(
               stroke-width="1.6" stroke-linecap="round" opacity="0.9" />
       </g>
     </svg>`;
-  // 傾いたブリキのバケツから赤いペンキがあふれ出ている絵。手前に流れを描くので
-  // 胴 → 口 の順に描いたあと、最後にペンキを重ねる
-  const bucketSvg = `
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <defs>
-        <linearGradient id="bkt-body" x1="0.1" y1="0" x2="0.9" y2="1">
-          <stop offset="0" stop-color="#b3bac2" />
-          <stop offset="0.28" stop-color="#fbfcfd" />
-          <stop offset="0.55" stop-color="#c3c9d0" />
-          <stop offset="1" stop-color="#878f98" />
-        </linearGradient>
-      </defs>
-      <g transform="translate(32 32) scale(1.07) translate(-32 -32)">
-        <g transform="translate(4 1) rotate(-52 38 34)">
-          <path d="M50 23 C61 26 61 42 50 45" fill="none" stroke="#5b6570"
-                stroke-width="2.6" stroke-linecap="round" />
-          <path d="M24.5 18 L27.5 48 A10.5 4 0 0 0 48.5 48 L51.5 18 A13.5 5 0 0 1 24.5 18 Z"
-                fill="url(#bkt-body)" stroke="#5b6570" stroke-width="2.6" stroke-linejoin="round" />
-          <path d="M32 24 L34.2 45" fill="none" stroke="#ffffff"
-                stroke-width="3" stroke-linecap="round" opacity="0.6" />
-          <ellipse cx="38" cy="18" rx="13.5" ry="5"
-                   fill="#7f888f" stroke="#5b6570" stroke-width="2.6" />
-          <ellipse cx="38" cy="18.4" rx="9.6" ry="2.9" fill="#69727a" />
-          <circle cx="50.5" cy="24" r="3" fill="#e4e8ec" stroke="#5b6570" stroke-width="2.2" />
-        </g>
-        <path d="M19.5 29 C13.5 31.5 10 35.5 10 41 L10 49.5
-                 A5.2 5.2 0 0 0 20.4 49.5 L20.4 43
-                 C20.4 39.5 23 37 26.5 36 Z"
-              fill="#c40f22" stroke="#7a0713" stroke-width="2.3" stroke-linejoin="round" />
-        <path d="M22 33 C16.5 36 14 39.5 14 44" fill="none" stroke="#ef5568"
-              stroke-width="3" stroke-linecap="round" opacity="0.85" />
-      </g>
-    </svg>`;
   const renderMode = () => {
     if (overlayMode === "mix") {
       modeBtn.innerHTML = brushSvg;
     } else if (overlayMode === "fill") {
-      modeBtn.innerHTML = bucketSvg;
+      modeBtn.innerHTML = bucketSvg();
     } else {
       modeBtn.textContent = "🖍️";
     }
