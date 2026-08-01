@@ -6,7 +6,7 @@
 // 共有下絵の png は透明化済みのものへ中身だけ差し替わる（ファイル名は同じ）。
 // cache-first なので、名前を上げて古いキャッシュを捨てないと白背景のままの下絵が
 // 使われ続けてしまう。下絵を差し替えたらここも上げること。
-const CACHE_NAME = "dino-coloring-v11";
+const CACHE_NAME = "dino-coloring-v12";
 const PRECACHE = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
