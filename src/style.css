@@ -555,6 +555,20 @@ body {
   accent-color: #f0a12e;
 }
 
+/* 文章の中に混ぜる道具のアイコン（バケツなど）。絵文字と同じ感覚で置ける大きさ */
+.inline-icon {
+  display: inline-block;
+  width: 1.5em;
+  height: 1.5em;
+  vertical-align: -0.42em;
+}
+
+.inline-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 /* ---------------------------------------------------------------- manage / category editor */
 
 .manage,
