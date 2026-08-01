@@ -2,7 +2,7 @@
 import "./style.css";
 import { catalog, lineArtSrc, drawLineArt, CANVAS_W, CANVAS_H, LineArt } from "./lineart";
 import { PaintEngine } from "./paint";
-import { buildToolbar, bindLongPress, bindTrashLongPress } from "./tools";
+import { buildToolbar, bindLongPress, bindTrashLongPress, bucketSvg } from "./tools";
 import * as store from "./store";
 import { celebrate } from "./celebrate";
 import { blip, startBgm, stopBgm, startBrush, stopBrush, makeMuteButton } from "./audio";
@@ -427,6 +427,14 @@ function saveGuardThreshold(v: number) {
   }
 }
 
+/** 文章の中に埋め込むバケツのアイコン（ツールバーのボタンと同じ絵） */
+function makeInlineBucket(): HTMLSpanElement {
+  const span = document.createElement("span");
+  span.className = "inline-icon";
+  span.innerHTML = bucketSvg();
+  return span;
+}
+
 const FILL_KEY = "dino-coloring:fill-tool";
 
 /** バケツ（ぬりつぶし）を使えるようにするか。既定はオフ（おとなが明示的に有効化する） */
@@ -490,8 +498,12 @@ function showColoringSettings() {
   fillSub.textContent = "バケツ（ぬりつぶし）";
   const fillDesc = document.createElement("p");
   fillDesc.className = "tm-desc";
-  fillDesc.textContent =
-    "タップした囲まれた場所を 一発でぬりつぶします。かんたんに仕上がるぶん、手で塗る練習にはなりません。オンにすると ぬりえ画面の くれよん／えのぐ の切り替えに 🪣 が増えます。";
+  // 文中のアイコンは絵文字ではなくツールバーと同じ絵にする（端末差が出ないように）
+  fillDesc.append(
+    "タップした囲まれた場所を 一発でぬりつぶします。かんたんに仕上がるぶん、手で塗る練習にはなりません。オンにすると ぬりえ画面の くれよん／えのぐ の切り替えに ",
+    makeInlineBucket(),
+    " が増えます。"
+  );
 
   const fillRow = document.createElement("div");
   fillRow.className = "level-checks";
@@ -501,7 +513,7 @@ function showColoringSettings() {
   fillCheck.type = "checkbox";
   fillCheck.checked = loadFillEnabled();
   const fillText = document.createElement("span");
-  fillText.textContent = "🪣 バケツを つかえるようにする";
+  fillText.append(makeInlineBucket(), " バケツを つかえるようにする");
   fillCheck.addEventListener("change", () => {
     saveFillEnabled(fillCheck.checked);
     blip(fillCheck.checked ? 620 : 380);
