@@ -429,7 +429,7 @@ function saveGuardThreshold(v: number) {
 
 const FILL_KEY = "dino-coloring:fill-tool";
 
-/** ペンキ（ぬりつぶし）を使えるようにするか。既定はオフ（おとなが明示的に有効化する） */
+/** バケツ（ぬりつぶし）を使えるようにするか。既定はオフ（おとなが明示的に有効化する） */
 function loadFillEnabled(): boolean {
   try {
     return localStorage.getItem(FILL_KEY) === "1";
@@ -446,7 +446,7 @@ function saveFillEnabled(v: boolean) {
   }
 }
 
-/** ぬりえのせってい: はみだしガードの閾値・ペンキの有無・子どもに見せるレベル。 */
+/** ぬりえのせってい: はみだしガードの閾値・バケツの有無・子どもに見せるレベル。 */
 function showColoringSettings() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
@@ -484,10 +484,10 @@ function showColoringSettings() {
   });
   row.append(slider, value);
 
-  // ---- ペンキ（ぬりつぶし）----
+  // ---- バケツ（ぬりつぶし）----
   const fillSub = document.createElement("h2");
   fillSub.className = "guard-sub";
-  fillSub.textContent = "ペンキ（ぬりつぶし）";
+  fillSub.textContent = "バケツ（ぬりつぶし）";
   const fillDesc = document.createElement("p");
   fillDesc.className = "tm-desc";
   fillDesc.textContent =
@@ -501,7 +501,7 @@ function showColoringSettings() {
   fillCheck.type = "checkbox";
   fillCheck.checked = loadFillEnabled();
   const fillText = document.createElement("span");
-  fillText.textContent = "🪣 ペンキを つかえるようにする";
+  fillText.textContent = "🪣 バケツを つかえるようにする";
   fillCheck.addEventListener("change", () => {
     saveFillEnabled(fillCheck.checked);
     blip(fillCheck.checked ? 620 : 380);
@@ -1369,7 +1369,7 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   });
   // ドラッグ中は塗り/消しゴム音を継続再生する
   engine.onStrokeStart = () => startBrush(engine.getMode());
-  // ペンキは一瞬で終わるので継続音ではなく単発の音
+  // バケツは一瞬で終わるので継続音ではなく単発の音
   engine.onFill = () => blip(620);
   engine.onStrokeEnd = () => {
     stopBrush();

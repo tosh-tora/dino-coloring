@@ -31,7 +31,7 @@ export class PaintEngine {
   private color = "#e74c3c";
   private size = 26;
   private mode: PaintMode = "normal";
-  /** ペンキ（ぬりつぶし）ツールが有効か。mode とは独立の軸で、
+  /** バケツ（ぬりつぶし）ツールが有効か。mode とは独立の軸で、
    *  消しゴムと組み合わせると「領域まるごと消し」になる */
   private fillTool = false;
 
@@ -62,7 +62,7 @@ export class PaintEngine {
 
   onStrokeStart: (() => void) | null = null;
   onStrokeEnd: (() => void) | null = null;
-  /** ペンキで実際に塗りつぶせたときに呼ぶ（効果音は呼び元にまかせる） */
+  /** バケツで実際に塗りつぶせたときに呼ぶ（効果音は呼び元にまかせる） */
   onFill: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -100,7 +100,7 @@ export class PaintEngine {
   getMode(): PaintMode {
     return this.mode;
   }
-  /** ペンキ（ぬりつぶし）ツールの ON/OFF */
+  /** バケツ（ぬりつぶし）ツールの ON/OFF */
   setFillTool(on: boolean) {
     this.fillTool = on;
   }
@@ -135,7 +135,7 @@ export class PaintEngine {
     // 2 本目以降の指は無視（簡易パーム対策）
     if (this.activePointer !== null) return;
 
-    // ペンキ: タップした瞬間に閉領域を塗りつぶす。ストローク状態は一切持たない
+    // バケツ: タップした瞬間に閉領域を塗りつぶす。ストローク状態は一切持たない
     if (this.fillTool) {
       if (!this.fillRegion(this.toCanvasPos(e))) return;
       this.onFill?.();
@@ -219,7 +219,7 @@ export class PaintEngine {
     this.lastInside = { x: seed % w, y: Math.floor(seed / w) };
   }
 
-  /** ペンキ: pos を含む閉領域を一発で塗りつぶす（消しゴム中なら一発で消す）。
+  /** バケツ: pos を含む閉領域を一発で塗りつぶす（消しゴム中なら一発で消す）。
    *  ガード設定とは無関係に、線画の barrier があるときだけ効く。 */
   private fillRegion(pos: { x: number; y: number }): boolean {
     if (!this.barrier) return false; // 線画が読めていない: 塗りつぶす境界がない
@@ -250,7 +250,7 @@ export class PaintEngine {
     return true;
   }
 
-  /** strokeBuf をいまのモードで本 canvas に合成する（なぞり描きとペンキで共通） */
+  /** strokeBuf をいまのモードで本 canvas に合成する（なぞり描きとバケツで共通） */
   private compositeStroke() {
     const ctx = this.ctx;
     if (this.mode === "mix") {
