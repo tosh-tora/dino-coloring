@@ -64,18 +64,6 @@ const STRONG_INK_RATIO = 0.15;
  * 生き物の一部（切り落とされた頭など）とみなす。
  */
 const BODY_PART_COVERAGE = 0.7;
-/** 付属物として足してよい線のかたまりの大きさ（主役の面積に対する割合） */
-const APPENDAGE_AREA_RATIO = 0.05;
-/**
- * 付属物が主役の外接矩形からはみ出してよい量（矩形の辺に対する割合）。触覚・足・ひげは
- * 体のそばに収まるが、地面の線は主役の幅を超えて画面を横切る。太さでは分けられない
- * （触覚が落ちるのは細いからで、地面も同じ細さ）ので、この広がりが両者を分ける手がかりになる。
- */
-const APPENDAGE_MARGIN = 0.2;
-/** 付属物を足すときに広げる半径。線のアンチエイリアスの縁まで連れていくため */
-const APPENDAGE_GROW = 2;
-/** 付属物がシルエットに接してよい面積（かたまり自身の画素数に対する割合） */
-const APPENDAGE_CONTACT_RATIO = 0.25;
 
 export interface SubjectMask {
   /** 1 = 主役。長さ w*h */
@@ -338,110 +326,6 @@ function severThinBridges(sil: Uint8Array, w: number, h: number, r: number): Uin
   return out;
 }
 
-/**
- * シルエットに くっついている 細い線（ちょうちょの触覚・翼竜の足）を主役に足す。
- *
- * 主役は「太い輪郭線の内側を塗る」方式で作るので、面を囲まない一本線の付属物は
- * 原理的にシルエットへ入らない。そのまま動かすと本体だけが動いて、触覚や足が紙に
- * 置き去りになる（＝今回直したい症状）。
- *
- * 地面や草まで連れて行かないよう、足すのは「主役の一部としか思えない」かたまりだけ:
- *  - シルエットに接している
- *  - 画像の縁に触れていない（地面・空・枠は必ずどこかの縁へ抜ける）
- *  - 主役よりずっと小さい
- *  - 主役の外接矩形を少しはみ出す程度に収まっている（画面を横切る線を落とす）
- *
- * 足すときは少し広げる。線のアンチエイリアスされた縁 (alpha < INK_ALPHA) を置いて
- * いくと、動かしたあとに薄い輪郭だけが紙に残ってしまうため。
- */
-function attachAppendages(subjects: SubjectMask[], ink: Uint8Array, w: number, h: number) {
-  if (subjects.length === 0) return;
-
-  // どのシルエットにも入っていない線
-  const loose = new Uint8Array(w * h);
-  for (let i = 0; i < loose.length; i++) {
-    if (ink[i] === 0) continue;
-    let covered = false;
-    for (const s of subjects) {
-      if (s.mask[i] === 1) {
-        covered = true;
-        break;
-      }
-    }
-    loose[i] = covered ? 0 : 1;
-  }
-
-  const grow = scaleR(APPENDAGE_GROW, w);
-  const comps = connectedComponents(loose, w, h);
-  const taken = new Set<number>();
-
-  for (const s of subjects) {
-    // 主役の縁に接しているかを見るための 1px 外周
-    const near = dilate(s.mask, w, h, 1);
-    const add = new Uint8Array(w * h);
-    let found = false;
-
-    for (let ci = 0; ci < comps.length; ci++) {
-      const comp = comps[ci];
-      if (taken.has(ci)) continue; // 2 体いる絵で同じ線を両方に足さない
-      if (comp.pixels.length > s.area * APPENDAGE_AREA_RATIO) continue;
-      if (comp.minX === 0 || comp.minY === 0 || comp.maxX === w - 1 || comp.maxY === h - 1) continue;
-      const mx = s.w * APPENDAGE_MARGIN;
-      const my = s.h * APPENDAGE_MARGIN;
-      if (
-        comp.minX < s.x - mx ||
-        comp.maxX > s.x + s.w - 1 + mx ||
-        comp.minY < s.y - my ||
-        comp.maxY > s.y + s.h - 1 + my
-      ) {
-        continue;
-      }
-      // 接しかたを見る。本体から生えている付属物は根もと 1 箇所でしか触れないが、
-      // 主役の輪郭に切られた背景（脚の後ろの草など）は左右に分かれて 2 箇所以上で
-      // 触れたり、長い弧に沿って触れたりする
-      const contact = new Uint8Array(w * h);
-      let contactArea = 0;
-      for (const p of comp.pixels) {
-        if (near[p] === 1) {
-          contact[p] = 1;
-          contactArea++;
-        }
-      }
-      if (contactArea === 0) continue;
-      if (contactArea > comp.pixels.length * APPENDAGE_CONTACT_RATIO) continue;
-      if (connectedComponents(contact, w, h).length !== 1) continue;
-
-      for (const p of comp.pixels) add[p] = 1;
-      taken.add(ci);
-      found = true;
-    }
-    if (!found) continue;
-
-    // 広げるのは足したぶんだけ。主役のシルエットまで太らせない
-    const grown = dilate(add, w, h, grow);
-    for (let i = 0; i < grown.length; i++) {
-      if (grown[i] === 1 && s.mask[i] === 0) {
-        s.mask[i] = 1;
-        s.area++;
-        const x = i % w;
-        const y = (i - x) / w;
-        if (x < s.x) {
-          s.w += s.x - x;
-          s.x = x;
-        } else if (x > s.x + s.w - 1) {
-          s.w = x - s.x + 1;
-        }
-        if (y < s.y) {
-          s.h += s.y - y;
-          s.y = y;
-        } else if (y > s.y + s.h - 1) {
-          s.h = y - s.y + 1;
-        }
-      }
-    }
-  }
-}
-
 /** シルエットの外接矩形と面積を測り、主役として妥当なら SubjectMask にして返す */
 function measure(mask: Uint8Array, w: number, h: number): SubjectMask | null {
   let minX = w;
@@ -698,8 +582,5 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
       bestUnion = union;
     }
   }
-  // 触覚や足のような「面を囲まない付属物」は最後に足す。半径を選ぶ物差し
-  // （面積・輪郭一致率）を歪めないよう、候補が決まってから触る
-  attachAppendages(best, ink, w, h);
   return best;
 }
