@@ -39,7 +39,7 @@ const MODE_TITLE: Record<ToolMode, string> = {
   fill: "ぬりつぶし",
 };
 /** タップしたときに一瞬出るポップアップの文言（子ども向けの呼び名） */
-const MODE_POP: Record<ToolMode, string> = { normal: "くれよん", mix: "えのぐ", fill: "ペンキ" };
+const MODE_POP: Record<ToolMode, string> = { normal: "くれよん", mix: "えのぐ", fill: "バケツ" };
 const MODE_BLIP: Record<ToolMode, number> = { normal: 560, mix: 740, fill: 640 };
 
 /** 長押しで発火するボタン。押している間 CSS 変数 --p (0→1) で進捗リングを描く */
@@ -216,7 +216,7 @@ export interface Toolbar {
 
 export interface ToolbarOptions {
   level?: Level;
-  /** ペンキ（ぬりつぶし）をモード切替に含めるか。おとなメニューの設定 */
+  /** バケツ（ぬりつぶし）をモード切替に含めるか。おとなメニューの設定 */
   fillEnabled?: boolean;
 }
 
@@ -231,7 +231,7 @@ export function buildToolbar(
   const colorsEl = document.createElement("div");
   colorsEl.className = "panel colors";
 
-  // ペンキがオフなら、いままで通り くれよん ↔ えのぐ の 2 段のまま
+  // バケツがオフなら、いままで通り くれよん ↔ えのぐ の 2 段のまま
   const cycle: ToolMode[] = opts.fillEnabled ? ["normal", "mix", "fill"] : ["normal", "mix"];
   let overlayMode: ToolMode = "normal";
 
