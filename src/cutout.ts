@@ -53,6 +53,17 @@ const SEVER_R = 7;
  * 隣り合う 2 体目を拾いつつ、触れているだけの草や石は落とせる値にしてある。
  */
 const SEVER_KEEP_RATIO = 0.3;
+/**
+ * 「いちばん太い線」の物差しを作るとき、太線マスクに最低限残っていてほしいインクの割合。
+ * これを満たす中でいちばん厳しい収縮半径を選ぶので、背景も主役も同じ細さで描かれた絵では
+ * 自然に緩い（＝ほぼ全部の線を太線とみなす）物差しになる。
+ */
+const STRONG_INK_RATIO = 0.15;
+/**
+ * 手放す領域の縁がこの割合以上「いちばん太い線」に乗っていたら、それは背景ではなく
+ * 生き物の一部（切り落とされた頭など）とみなす。
+ */
+const BODY_PART_COVERAGE = 0.7;
 
 export interface SubjectMask {
   /** 1 = 主役。長さ w*h */
@@ -427,6 +438,51 @@ function setScore(subjects: SubjectMask[]): number {
   return area === 0 ? 0 : sum / area;
 }
 
+function totalArea(subjects: SubjectMask[]): number {
+  let area = 0;
+  for (const s of subjects) area += s.area;
+  return area;
+}
+
+/** 候補のマスクをひとつに重ねる（候補同士を面で比べるため） */
+function unionMask(subjects: SubjectMask[], w: number, h: number): Uint8Array {
+  const out = new Uint8Array(w * h);
+  for (const s of subjects) {
+    for (let i = 0; i < out.length; i++) if (s.mask[i] === 1) out[i] = 1;
+  }
+  return out;
+}
+
+/**
+ * 大きい候補から小さい候補へ乗り換えてよいか。
+ *
+ * 小さいほうが良いのは「背景を巻き込まずに済んでいる」ときだけで、生き物の一部
+ * （細い首の先の頭など）が切り落とされて小さくなっているなら乗り換えてはいけない。
+ * 手放す領域の縁が太線＝主役の輪郭で囲まれていれば体の一部、そうでなければ背景。
+ */
+function dropsOnlyBackground(
+  larger: Uint8Array,
+  smaller: Uint8Array,
+  nearStrong: Uint8Array,
+  w: number,
+  h: number
+): boolean {
+  const dropped = new Uint8Array(w * h);
+  for (let i = 0; i < dropped.length; i++) {
+    dropped[i] = larger[i] === 1 && smaller[i] === 0 ? 1 : 0;
+  }
+  const inner = erode(dropped, w, h, 1);
+  let edge = 0;
+  let on = 0;
+  for (let i = 0; i < dropped.length; i++) {
+    if (dropped[i] === 1 && inner[i] === 0) {
+      edge++;
+      if (nearStrong[i] === 1) on++;
+    }
+  }
+  return edge === 0 ? true : on / edge < BODY_PART_COVERAGE;
+}
+
 /**
  * 切り抜けた主役より大きいものが画面の外へ続いているか。
  * そうなら、この絵の本当の主役は画面に収まっていない（＝切り抜けたのは体の一部）。
@@ -451,14 +507,34 @@ function missesClippedSubject(found: Extraction): boolean {
 export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): SubjectMask[] {
   const ink = new Uint8Array(w * h);
   for (let i = 0; i < ink.length; i++) ink[i] = alpha[i] >= INK_ALPHA ? 1 : 0;
+  let inkArea = 0;
+  for (let i = 0; i < ink.length; i++) inkArea += ink[i];
+
+  // オープニング（収縮→膨張）で細い線を落とし、太い線だけを元の太さで残す
+  const opened = ERODE_RADII.map((erBase) => {
+    const er = scaleR(erBase, w);
+    return dilate(erode(ink, w, h, er), w, h, er);
+  });
+  // 候補同士を比べるときだけに使う「いちばん太い線」の物差し。半径ごとの太線マスクは
+  // 小さい半径だと背景の細線まで含んでしまい、候補の良し悪しを測れない
+  let strong = opened[0];
+  for (let i = opened.length - 1; i >= 0; i--) {
+    let n = 0;
+    for (let p = 0; p < opened[i].length; p++) n += opened[i][p];
+    if (n >= inkArea * STRONG_INK_RATIO) {
+      strong = opened[i];
+      break;
+    }
+  }
+  const nearStrong = dilate(strong, w, h, scaleR(3, w));
 
   let best: SubjectMask[] = [];
   let bestScore = -1;
+  let bestArea = Infinity;
+  let bestUnion: Uint8Array | null = null;
 
-  for (const erBase of ERODE_RADII) {
-    const er = scaleR(erBase, w);
-    // オープニング（収縮→膨張）で細い線を落とし、太い線だけを元の太さで残す
-    const thick = dilate(erode(ink, w, h, er), w, h, er);
+  for (let ei = 0; ei < ERODE_RADII.length; ei++) {
+    const thick = opened[ei];
     // 一致判定は多少のズレを許す（塗りつぶしは線の内側で止まるため）
     const nearThick = dilate(thick, w, h, scaleR(3, w));
 
@@ -470,12 +546,40 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
       // こない（画面の外にあるので）ため、この絵は諦める
       if (missesClippedSubject(found)) return [];
       const score = setScore(found.subjects);
-      if (score > bestScore) {
-        bestScore = score;
-        best = found.subjects;
+
+      if (score < GOOD_COVERAGE) {
+        // まだ「十分きれい」に届いていない段階では、一致率がいちばん高いものを控えておく
+        if (bestScore < GOOD_COVERAGE && score > bestScore) {
+          bestScore = score;
+          bestArea = totalArea(found.subjects);
+          best = found.subjects;
+          bestUnion = null;
+        }
+        continue;
       }
-      // 十分きれいに取れたら、これ以上半径を上げて歪ませる必要はない
-      if (score >= GOOD_COVERAGE) return found.subjects;
+
+      // ここから先は「十分きれいに切れている」候補同士の比較。
+      // 縁が線の上で止まっているだけでは、その線が主役の輪郭なのか地面や草なのかは
+      // 区別できない（収縮半径が小さいと背景の線も太線として残るため、一致率は簡単に
+      // 1.0 になる）。背景を巻き込めば面積は増えるだけなので、同じくらいきれいに
+      // 切れているなら小さいほうが「生き物だけ」を捉えている。
+      const area = totalArea(found.subjects);
+      if (bestScore < GOOD_COVERAGE) {
+        bestScore = score;
+        bestArea = area;
+        best = found.subjects;
+        bestUnion = null;
+        continue;
+      }
+      if (area >= bestArea) continue;
+      const union = unionMask(found.subjects, w, h);
+      bestUnion ??= unionMask(best, w, h);
+      // ただし小さくなった理由が「生き物の一部を切り落とした」ならそれは改善ではない
+      if (!dropsOnlyBackground(bestUnion, union, nearStrong, w, h)) continue;
+      bestScore = score;
+      bestArea = area;
+      best = found.subjects;
+      bestUnion = union;
     }
   }
   return best;
