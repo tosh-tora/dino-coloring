@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "optimize-art": "node scripts/optimize-shared-art.mjs",
-    "art-levels": "node scripts/compute-art-levels.mjs"
+    "art-levels": "node scripts/compute-art-levels.mjs",
+    "check-cutouts": "node scripts/check-cutouts.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3",
