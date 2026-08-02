@@ -71,6 +71,27 @@ export function lineAlpha(r: number, g: number, b: number, a: number): number {
 }
 
 /**
+ * 白背景の線画 1 画素を下絵の画素に変換して RGBA バッファへ書き戻し、
+ * 線の濃さ（アルファ）を返す。i は画素の先頭バイト位置。
+ *
+ * 線の"色"はどこにも使っていない（塗りは下のレイヤーから透け、はみだしガード
+ * (paint.ts) ・主役の切り抜き (cutout.ts) ・レベル判定はすべてアルファだけを見る）ので
+ * RGB は黒に潰す。3 チャンネルが一様になるぶん PNG が縮み、同梱の下絵で実測 2〜6 割。
+ * アップロード画像は data URL のまま IndexedDB に入るので、そのまま端末の使用量が減る。
+ *
+ * px の型を添字アクセスだけにしてあるのは、ブラウザの Uint8ClampedArray（ImageData）と
+ * CLI 側の Buffer（scripts/lib/lineart-raw.mjs）を同じ関数で扱うため。
+ */
+export function writeLinePixel(px: { [i: number]: number }, i: number): number {
+  const a = lineAlpha(px[i], px[i + 1], px[i + 2], px[i + 3]);
+  px[i] = 0;
+  px[i + 1] = 0;
+  px[i + 2] = 0;
+  px[i + 3] = a;
+  return a;
+}
+
+/**
  * 等倍のアルファを面積平均で ANALYZE_W x ANALYZE_H に縮小する。
  *
  * 縮小をブラウザ（drawImage の転送先を小さくする）に任せないのが要点。drawImage の
