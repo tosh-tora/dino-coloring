@@ -3,12 +3,12 @@
 // 下絵の透明化を CLI で 1 回だけやってコミットするため（＝端末側の起動時にやらないため）、
 // 焼き込む側（optimize-shared-art.mjs）と、レベルを判定する側
 // （compute-art-levels.mjs）の両方がこの変換を必要とする。2 箇所に書くとずれるので
-// ここに集約する。しきい値そのものは src/level-core.ts の lineAlpha だけに持つ
+// ここに集約する。画素の変換規則そのものは src/level-core.ts の writeLinePixel だけに持つ
 // （ブラウザのアップロード変換 src/template.ts とも同じ規則になる）。
 //
 // TypeScript を直接 import するので Node 22.6 以上が必要（型注釈の除去）。
 import sharp from "sharp";
-import { lineAlpha } from "../../src/level-core.ts";
+import { writeLinePixel } from "../../src/level-core.ts";
 
 // src/lineart.ts の CANVAS_W/CANVAS_H と同じ値。この定数を変えたらここも合わせること
 export const CANVAS_W = 1024;
@@ -26,6 +26,7 @@ const BAKED_CLEAR_RATIO = 0.2;
 /**
  * 画像を 1024x768 の透明化済み RGBA にする。
  * 縦横比を保って中に収め（contain）、余白は透明、白に近い画素ほど透明にする。
+ * 残った線は黒に統一する（色は使わないので、圧縮のために捨てる）。
  *
  * 返り値の data は RGBA の生バッファ（そのまま sharp で PNG 化できる）、
  * alpha は「線の濃さ」だけを取り出した w*h の配列（レベル判定にそのまま渡せる）。
@@ -64,9 +65,16 @@ export async function toLineartRaw(input) {
 
   const alpha = new Uint8Array(CANVAS_W * CANVAS_H);
   for (let i = 0, p = 0; p < alpha.length; i += 4, p++) {
-    const a = baked ? data[i + 3] : lineAlpha(data[i], data[i + 1], data[i + 2], data[i + 3]);
-    data[i + 3] = a;
-    alpha[p] = a;
+    if (baked) {
+      // 透明化済みなのでアルファは触らない（二度かけると線が薄くなる）。
+      // RGB を黒に潰すのは冪等なのでこちらは毎回やる
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      alpha[p] = data[i + 3];
+    } else {
+      alpha[p] = writeLinePixel(data, i);
+    }
   }
 
   return { data, alpha, baked, width: CANVAS_W, height: CANVAS_H };
