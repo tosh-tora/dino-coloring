@@ -11,7 +11,7 @@ import * as store from "./store";
  * 抽出アルゴリズムの版。cutout.ts のしきい値や手順を変えたら上げること。
  * 古いキャッシュは無視され、次に開いたときに作り直される。
  */
-const CUTOUT_VERSION = 5;
+const CUTOUT_VERSION = 6;
 
 /** これ未満の輪郭一致率なら、主役をきれいに切り出せていないとみなす */
 export const MIN_CONFIDENCE = 0.85;
