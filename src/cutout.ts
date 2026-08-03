@@ -71,6 +71,13 @@ const STRONG_INK_RATIO = 0.15;
  * 生き物の一部（切り落とされた頭など）とみなす。
  */
 const BODY_PART_COVERAGE = 0.7;
+/**
+ * 逆に、増える領域を「欠けていた体が戻ってきた」と認めるのに要る割合。
+ * 手放す側より厳しい理由は addsOnlyBody を参照。
+ */
+const GROW_BODY_COVERAGE = 0.95;
+/** 大きいシルエットへ乗り換えるときに許す、シルエット全体の輪郭一致率の下がりしろ */
+const GROW_SCORE_DROP = 0.005;
 
 export interface SubjectMask {
   /** 1 = 主役。長さ w*h */
@@ -519,6 +526,30 @@ function dropsOnlyBackground(
 }
 
 /**
+ * 小さい候補から大きい候補へ乗り換えてよいか。
+ *
+ * ふつう大きいほうは背景を巻き込んだ結果だが、輪郭の切れ目から塗りが漏れて欠けていた
+ * 部分が、すき間埋めの半径を上げたことで戻ってくる絵もある（マンモスの胴、プテラノドンの
+ * 手前の翼）。戻ってきた体はぐるりと主役の輪郭で囲まれているのに対し、背景を巻き込んだ
+ * ときは線の無いところを橋渡ししたぶん縁が線から外れ、シルエット全体の一致率も下がる。
+ *
+ * 手放す側 (dropsOnlyBackground) より厳しくしてあるのは、岩・氷・草が生き物と同じ太さで
+ * 描かれた絵では「増えたぶんも線で囲まれている」が普通に成り立ってしまい、それだけでは
+ * 背景と区別できないため。それでも下絵によっては背景を拾う（README の設計メモを参照）。
+ */
+function addsOnlyBody(
+  larger: Uint8Array,
+  smaller: Uint8Array,
+  nearStrong: Uint8Array,
+  w: number,
+  h: number,
+  scoreDelta: number
+): boolean {
+  if (scoreDelta < -GROW_SCORE_DROP) return false;
+  return edgeCoverage(diffMask(larger, smaller), nearStrong, w, h) >= GROW_BODY_COVERAGE;
+}
+
+/**
  * 切り抜けた主役より大きいものが画面の外へ続いているか。
  * そうなら、この絵の本当の主役は画面に収まっていない（＝切り抜けたのは体の一部）。
  */
@@ -597,7 +628,8 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
       // 縁が線の上で止まっているだけでは、その線が主役の輪郭なのか地面や草なのかは
       // 区別できない（収縮半径が小さいと背景の線も太線として残るため、一致率は簡単に
       // 1.0 になる）。背景を巻き込めば面積は増えるだけなので、同じくらいきれいに
-      // 切れているなら小さいほうが「生き物だけ」を捉えている。
+      // 切れているなら小さいほうが「生き物だけ」を捉えている。ただし増減した領域が体か
+      // 背景かで例外を見る（dropsOnlyBackground / addsOnlyBody）。
       const area = totalArea(found.subjects);
       if (bestScore < GOOD_COVERAGE) {
         bestScore = score;
@@ -606,11 +638,15 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
         bestUnion = null;
         continue;
       }
-      if (area >= bestArea) continue;
       const union = unionMask(found.subjects, w, h);
       bestUnion ??= unionMask(best, w, h);
-      // ただし小さくなった理由が「生き物の一部を切り落とした」ならそれは改善ではない
-      if (!dropsOnlyBackground(bestUnion, union, nearStrong, w, h)) continue;
+      const better =
+        area < bestArea
+          ? // 小さくなった理由が「生き物の一部を切り落とした」ならそれは改善ではない
+            dropsOnlyBackground(bestUnion, union, nearStrong, w, h)
+          : // 大きくなってよいのは、欠けていた体が戻ってきたときだけ
+            addsOnlyBody(union, bestUnion, nearStrong, w, h, score - bestScore);
+      if (!better) continue;
       bestScore = score;
       bestArea = area;
       best = found.subjects;
