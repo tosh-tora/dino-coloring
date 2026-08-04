@@ -145,7 +145,7 @@ async function showLibrary() {
   const makerBtn = document.createElement("button");
   makerBtn.className = "nav-btn maker-btn longpress";
   makerBtn.textContent = "🖊️";
-  makerBtn.title = "おとなメニュー（長押し）";
+  makerBtn.title = "保護者メニュー（長押し）";
   bindLongPress(makerBtn, 800, () => {
     blip(720);
     showAdultMenu();
@@ -376,7 +376,7 @@ function showAdultMenu() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🔧 おとなメニュー";
+  heading.textContent = "🔧 保護者メニュー";
 
   const mkBtn = (label: string, onClick: () => void) => {
     const b = document.createElement("button");
@@ -392,11 +392,11 @@ function showAdultMenu() {
 
   box.append(
     heading,
-    mkBtn("🖊️ 下絵をつくる", () => showTemplateMaker()),
-    mkBtn("🗂️ ぬりえのかんり（削除・分類・レベル）", () => showManage()),
-    mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor()),
-    mkBtn("⚙️ ぬりえのせってい", () => showColoringSettings()),
-    mkBtn("💾 さくひんを 保存する（写真・ファイルへ）", () => showSaveWorks())
+    mkBtn("🖊️ 下絵を作る", () => showTemplateMaker()),
+    mkBtn("🗂️ 塗り絵の管理（削除・分類・レベル）", () => showManage()),
+    mkBtn("🏷️ カテゴリーの編集", () => showCategoryEditor()),
+    mkBtn("⚙️ 塗り絵の設定", () => showColoringSettings()),
+    mkBtn("💾 作品を保存する（写真・ファイルへ）", () => showSaveWorks())
   );
   app.appendChild(overlay);
 }
@@ -459,7 +459,7 @@ function showColoringSettings() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "⚙️ ぬりえのせってい";
+  heading.textContent = "⚙️ 塗り絵の設定";
 
   const sub = document.createElement("h2");
   sub.className = "guard-sub";
@@ -495,12 +495,12 @@ function showColoringSettings() {
   // ---- バケツ（ぬりつぶし）----
   const fillSub = document.createElement("h2");
   fillSub.className = "guard-sub";
-  fillSub.textContent = "バケツ（ぬりつぶし）";
+  fillSub.textContent = "バケツ（塗りつぶし）";
   const fillDesc = document.createElement("p");
   fillDesc.className = "tm-desc";
   // 文中のアイコンは絵文字ではなくツールバーと同じ絵にする（端末差が出ないように）
   fillDesc.append(
-    "タップした囲まれた場所を 一発でぬりつぶします。かんたんに仕上がるぶん、手で塗る練習にはなりません。オンにすると ぬりえ画面の くれよん／えのぐ の切り替えに ",
+    "タップした囲まれた場所を一発で塗りつぶします。簡単に仕上がる分、手で塗る練習にはなりません。オンにすると塗り絵画面のくれよん／えのぐの切り替えに ",
     makeInlineBucket(),
     " が増えます。"
   );
@@ -513,7 +513,7 @@ function showColoringSettings() {
   fillCheck.type = "checkbox";
   fillCheck.checked = loadFillEnabled();
   const fillText = document.createElement("span");
-  fillText.append(makeInlineBucket(), " バケツを つかえるようにする");
+  fillText.append(makeInlineBucket(), " バケツを使えるようにする");
   fillCheck.addEventListener("change", () => {
     saveFillEnabled(fillCheck.checked);
     blip(fillCheck.checked ? 620 : 380);
@@ -528,7 +528,7 @@ function showColoringSettings() {
   const lvDesc = document.createElement("p");
   lvDesc.className = "tm-desc";
   lvDesc.textContent =
-    "チェックしたレベルのぬりえだけを ライブラリーに出します。レベルは絵の複雑さから自動で決まり、「ぬりえのかんり」で変えられます。";
+    "チェックしたレベルの塗り絵だけをライブラリーに出します。レベルは絵の複雑さから自動で決まり、「塗り絵の管理」で変えられます。";
 
   const allowed = loadAllowedLevels();
   const lvRow = document.createElement("div");
@@ -560,7 +560,7 @@ function showColoringSettings() {
   const foot = document.createElement("p");
   foot.className = "tm-desc";
   foot.textContent =
-    "せっていは この端末に保存され、次にひらいたときも 有効です。ぬりえ画面をひらき直すと反映されます。";
+    "設定はこの端末に保存され、次に開いたときも有効です。塗り絵画面を開き直すと反映されます。";
 
   box.append(heading, sub, desc, row, fillSub, fillDesc, fillRow, lvSub, lvDesc, lvRow, foot);
   // 閉じたらライブラリーを更新（見せるレベルの変更を反映する）
@@ -576,11 +576,11 @@ async function showManage() {
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🗂️ ぬりえのかんり";
+  heading.textContent = "🗂️ 塗り絵の管理";
   const desc = document.createElement("p");
   desc.className = "tm-desc";
   desc.textContent =
-    "なまえ・分類・レベルを変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
+    "名前・分類・レベルを変えたり、いらない塗り絵を消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
 
   const list = document.createElement("div");
   list.className = "manage-list";
@@ -608,8 +608,8 @@ async function showManage() {
     nm.type = "text";
     nm.className = "manage-name";
     nm.value = a.art.name;
-    nm.title = "なまえを へんしゅう";
-    nm.setAttribute("aria-label", "なまえ");
+    nm.title = "名前を編集";
+    nm.setAttribute("aria-label", "名前");
     // 空欄／既定名と同じなら上書きを解除して既定名に戻す。
     nm.addEventListener("change", async () => {
       const v = nm.value.trim();
@@ -632,7 +632,7 @@ async function showManage() {
     sel.className = "manage-select";
     const none = document.createElement("option");
     none.value = "";
-    none.textContent = "みぶんるい";
+    none.textContent = "未分類";
     sel.appendChild(none);
     for (const c of categories) {
       const opt = document.createElement("option");
@@ -689,7 +689,7 @@ async function showManage() {
       toggle.className = "manage-icon";
       const render = () => {
         toggle.textContent = a.hidden ? "🙈" : "👁️";
-        toggle.title = a.hidden ? "ひょうじする" : "ひひょうじにする";
+        toggle.title = a.hidden ? "表示する" : "非表示にする";
         row.classList.toggle("row-hidden", a.hidden);
       };
       render();
@@ -708,7 +708,7 @@ async function showManage() {
 
   const foot = document.createElement("p");
   foot.className = "tm-desc";
-  foot.textContent = "とじると ライブラリーに はんえいされます。";
+  foot.textContent = "閉じるとライブラリーに反映されます。";
 
   const body = document.createElement("div");
   body.className = "modal-body";
@@ -729,14 +729,14 @@ async function showSaveWorks() {
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "💾 さくひんの ほぞん";
+  heading.textContent = "💾 作品の保存";
   const desc = document.createElement("p");
   desc.className = "tm-desc";
-  desc.textContent = "ほぞんしたい さくひんをえらぶと、写真アプリやファイルに書き出せます。";
+  desc.textContent = "保存したい作品を選ぶと、写真アプリやファイルに書き出せます。";
 
   const warn = document.createElement("p");
   warn.className = "tm-desc warn";
-  warn.textContent = "この環境では 書き出しの動きが かんぜんではありません（https でひらいた本番のアプリで お試しください）";
+  warn.textContent = "この環境では書き出しの動きが完全ではありません（https で開いた本番のアプリでお試しください）";
   warn.hidden = shareFilesSupported();
 
   const selected = new Set<number>();
@@ -772,17 +772,17 @@ async function showSaveWorks() {
 
   function refreshControls() {
     const n = selected.size;
-    selectAllText.textContent = `ぜんぶ えらぶ（${withId.length}こ）`;
+    selectAllText.textContent = `全部選ぶ（${withId.length}件）`;
     selectAllCheck.checked = withId.length > 0 && n === withId.length;
     selectAllCheck.indeterminate = n > 0 && n < withId.length;
     if (n === 0) {
-      saveBtn.textContent = "💾 ほぞん";
+      saveBtn.textContent = "💾 保存";
       saveBtn.classList.add("disabled");
     } else if (n <= SHARE_BATCH_MAX) {
-      saveBtn.textContent = `💾 ${n}こ ほぞん`;
+      saveBtn.textContent = `💾 ${n}件 保存`;
       saveBtn.classList.remove("disabled");
     } else {
-      saveBtn.textContent = `💾 ${SHARE_BATCH_MAX}こ ほぞん（のこり ${n - SHARE_BATCH_MAX}こ）`;
+      saveBtn.textContent = `💾 ${SHARE_BATCH_MAX}件 保存（残り ${n - SHARE_BATCH_MAX}件）`;
       saveBtn.classList.remove("disabled");
     }
   }
@@ -822,7 +822,7 @@ async function showSaveWorks() {
   if (withId.length === 0) {
     const empty = document.createElement("div");
     empty.className = "gallery-empty";
-    empty.textContent = "まだ さくひんが ないよ 🎨";
+    empty.textContent = "まだ作品がありません 🎨";
     grid.appendChild(empty);
     selectAllRow.hidden = true;
     foot.hidden = true;
@@ -863,12 +863,12 @@ async function showSaveWorks() {
           const cell = cells.get(id);
           if (cell) setCellSelected(cell, false);
         }
-        const skippedNote = res.skipped > 0 ? `（${res.skipped}こは よみこめませんでした）` : "";
+        const skippedNote = res.skipped > 0 ? `（${res.skipped}件は読み込めませんでした）` : "";
         switch (res.outcome.kind) {
           case "shared":
           case "downloaded":
             toast.className = "tm-toast";
-            toast.textContent = `${res.outcome.count}こ ほぞんしました ✅${skippedNote}`;
+            toast.textContent = `${res.outcome.count}件保存しました ✅${skippedNote}`;
             toast.hidden = false;
             blip(700);
             break;
@@ -877,13 +877,13 @@ async function showSaveWorks() {
             break;
           case "unsupported":
             toast.className = "tm-toast warn";
-            toast.textContent = "この環境では ほぞんできません（https でひらいてください）";
+            toast.textContent = "この環境では保存できません（https で開いてください）";
             toast.hidden = false;
             blip(300);
             break;
           case "failed":
             toast.className = "tm-toast warn";
-            toast.textContent = `ほぞんできませんでした 😢${skippedNote}`;
+            toast.textContent = `保存できませんでした 😢${skippedNote}`;
             toast.hidden = false;
             blip(300);
             break;
@@ -907,7 +907,7 @@ async function showCategoryEditor() {
   const { overlay, box } = makeOverlay("cat-editor", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🏷️ カテゴリー";
+  heading.textContent = "🏷️ カテゴリーの編集";
 
   const list = document.createElement("div");
   list.className = "cat-list";
@@ -945,10 +945,10 @@ async function showCategoryEditor() {
   const addInput = document.createElement("input");
   addInput.type = "text";
   addInput.className = "tm-input";
-  addInput.placeholder = "あたらしい分類（例: うみのいきもの）";
+  addInput.placeholder = "新しい分類（例: 海の生き物）";
   const addBtn = document.createElement("button");
   addBtn.className = "tm-btn";
-  addBtn.textContent = "＋ ついか";
+  addBtn.textContent = "＋ 追加";
   addBtn.addEventListener("click", async () => {
     const v = addInput.value.trim();
     if (!v) return;
@@ -1079,7 +1079,7 @@ async function showTemplateMaker() {
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🖊️ 下絵メーカー（おとな向け）";
+  heading.textContent = "🖊️ 下絵メーカー（保護者向け）";
 
   // ---- セクション1: プロンプトを作る ----
   const sec1 = document.createElement("section");
@@ -1217,13 +1217,13 @@ async function showTemplateMaker() {
   const desc2 = document.createElement("p");
   desc2.className = "tm-desc";
   desc2.textContent =
-    "AIで作った白背景の下絵画像を選ぶと、ぬりえに追加されます。名前は①の「描きたいもの」が初期値です（変更可）。";
+    "AIで作った白背景の下絵画像を選ぶと、塗り絵に追加されます。名前は①の「描きたいもの」が初期値です（変更可）。";
 
   // 名前欄。初期値は①の「描きたいもの」。ユーザーが手で編集するまでは追従する。
   const nameInput = document.createElement("input");
   nameInput.type = "text";
   nameInput.className = "tm-input";
-  nameInput.placeholder = "マイぬりえ";
+  nameInput.placeholder = "マイ塗り絵";
   nameInput.value = input.value;
   let nameEdited = false;
   nameInput.addEventListener("input", () => {
@@ -1233,12 +1233,12 @@ async function showTemplateMaker() {
     if (!nameEdited) nameInput.value = input.value;
   });
 
-  // カテゴリー選択（任意）。既定は「みぶんるい」。
+  // カテゴリー選択（任意）。既定は「未分類」。
   const catSelect = document.createElement("select");
   catSelect.className = "tm-input tm-select";
   const noneOpt = document.createElement("option");
   noneOpt.value = "";
-  noneOpt.textContent = "みぶんるい";
+  noneOpt.textContent = "未分類";
   catSelect.appendChild(noneOpt);
   for (const c of categories) {
     const opt = document.createElement("option");
@@ -1272,7 +1272,7 @@ async function showTemplateMaker() {
       const { imageUrl, level } = await processUploadedImage(file);
       const createdAt = Date.now();
       const id = "custom-" + createdAt;
-      const name = nameInput.value.trim() || "マイぬりえ";
+      const name = nameInput.value.trim() || "マイ塗り絵";
       await store.addTemplate({ id, name, imageUrl, createdAt, level });
       if (catSelect.value) await store.setArtCategory(id, catSelect.value).catch(() => {});
       blip(760);
