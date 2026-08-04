@@ -1763,8 +1763,10 @@ async function showGallery() {
     const img = await loadImage(item.dataUrl).catch(() => null);
     if (!img) return;
     const entry = entryById.get(item.lineartId);
-    // 下絵が消えている作品は動かしようがないので、そのまま大きく見せる
-    const subjects = entry ? await cutOutSubjects(entry.art, img).catch(() => [] as Subject[]) : [];
+    // 下絵が消えている作品は動かしようがないので、そのまま大きく見せる。
+    // 切り抜きの完了は待たず、絵はすぐに開いて裏で並行して求める
+    // （playSubjects 側が届き次第「うごかす」ボタンを出す）
+    const subjects = entry ? cutOutSubjects(entry.art, img).catch(() => [] as Subject[]) : [];
     // 下絵が無いと線画を描き直せない＝塗り直せないので、そのときはボタンを出さない
     await playSubjects(img, subjects, {
       onMore: entry ? () => void reeditWork(item, entry) : undefined,
