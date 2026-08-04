@@ -842,15 +842,17 @@ body {
   border-radius: 12px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
   overflow: hidden;
+  /* ピンチをブラウザのスクロール／ズームに横取りさせない */
+  touch-action: none;
 }
 
-/* むしめがね: 拡大するのはこの内側だけ。紙 (.stage) の大きさと切り取りは変わらない。
-   canvas は等倍のままで、指の位置は getBoundingClientRect() 経由で自動的に合う */
+/* ピンチで拡大するのはこの内側だけ。紙 (.stage) の大きさと切り取りは変わらない。
+   canvas は等倍のままで、指の位置は getBoundingClientRect() 経由で自動的に合う。
+   transform は JS が指の動きに合わせて毎フレーム書き換えるので transition は付けない */
 .stage-inner {
   position: absolute;
   inset: 0;
-  transform-origin: 50% 50%;
-  transition: transform 150ms ease-out;
+  transform-origin: 0 0;
 }
 
 .stage canvas {
@@ -867,37 +869,6 @@ body {
 
 .lineart-layer {
   pointer-events: none;
-}
-
-/* 拡大する場所を選んでいる間だけ紙の前面に出す板。ここでタップを受け止めるので
-   場所選びのタップが塗りレイヤーに届かない */
-.zoom-pick {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  touch-action: none;
-  cursor: zoom-in;
-  background: rgba(143, 214, 164, 0.18);
-}
-
-.zoom-pick-label {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #2c5237;
-  color: #ffffff;
-  font-weight: bold;
-  font-size: 17px;
-  padding: 8px 20px;
-  border-radius: 999px;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-/* 押している間の色。「できた！」の黄色と紛れないように水色にする */
-.zoom-btn.selected {
-  background: #a9dcff;
 }
 
 /* ---------------------------------------------------------------- tools panel */
