@@ -26,9 +26,9 @@ export const LEVEL_MARK: Record<Level, string> = { 1: "★", 2: "★★", 3: "�
 
 /** 大人向けの説明ラベル。 */
 export const LEVEL_NAME: Record<Level, string> = {
-  1: "かんたん",
-  2: "ふつう",
-  3: "むずかしい",
+  1: "簡単",
+  2: "普通",
+  3: "難しい",
 };
 
 /** 判定に使う縮小サイズ。1024x768 の 1/4（4:3 を保つ）。 */
