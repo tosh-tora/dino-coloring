@@ -1312,10 +1312,15 @@ type ColoringStart =
 const ZOOM_MAX = 3;
 /** 指を離したときにこれ以下なら等倍に戻す。少しだけ広がったまま残らないように */
 const ZOOM_SNAP = 1.05;
+/** ホイール 1 目盛りぶんの拡大の効き具合。小さくすると 1 回で大きく変わる。
+ *  トラックパッドのピンチは細かい値が連続で来るので、マウスの 1 目盛り (deltaY=100)
+ *  が拡大しすぎない側に合わせてある */
+const WHEEL_ZOOM_DIVISOR = 300;
 
 /**
  * ピンチで紙の一部を大きくして、細かいところを塗れるようにする。
  * 2 本指を広げる＝拡大、縮める＝縮小、2 本指のまま動かす＝表示位置の移動。
+ * PC のトラックパッド（ピンチ / 2 本指スクロール）と Ctrl + ホイールでも同じことができる。
  *
  * 拡大は .stage-inner への CSS transform だけで行う。PaintEngine の座標変換は
  * canvas の getBoundingClientRect() 基準（＝祖先の transform が反映された矩形）なので、
@@ -1351,6 +1356,24 @@ function setupPinchZoom(stage: HTMLElement, inner: HTMLElement, engine: PaintEng
     tx = Math.min(0, Math.max(-maxX, tx));
     ty = Math.min(0, Math.max(-maxY, ty));
     inner.style.transform = scale === 1 ? "" : `translate(${tx}px, ${ty}px) scale(${scale})`;
+  };
+
+  /** (clientX, clientY) にある紙の点を動かさずに倍率を factor 倍する。
+   *  指の中点を基準にするピンチと同じことを、ポインタ 1 点でやる */
+  const zoomAt = (factor: number, clientX: number, clientY: number) => {
+    const next = Math.min(ZOOM_MAX, Math.max(1, scale * factor));
+    if (next === scale) return;
+    const rect = stage.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    tx = px - ((px - tx) / scale) * next;
+    ty = py - ((py - ty) / scale) * next;
+    scale = next <= ZOOM_SNAP ? 1 : next;
+    if (scale === 1) {
+      tx = 0;
+      ty = 0;
+    }
+    apply();
   };
 
   const onDown = (e: PointerEvent) => {
@@ -1400,6 +1423,40 @@ function setupPinchZoom(stage: HTMLElement, inner: HTMLElement, engine: PaintEng
   stage.addEventListener("pointermove", onMove, opts);
   stage.addEventListener("pointerup", onUp, opts);
   stage.addEventListener("pointercancel", onUp, opts);
+
+  // ---- PC（トラックパッド / マウス）----
+  // マウスで描いている最中に拡大すると、canvas の矩形が動いて線が飛ぶ。
+  // ピンチと同じように描きかけを取り消すが、指と違って「全部離れた」が分からないので
+  // すぐ再開させる（ボタンを押し直すまで次のストロークは始まらない）
+  const cancelPenStroke = () => {
+    engine.cancelStroke();
+    engine.resumeStrokes();
+  };
+
+  stage.addEventListener(
+    "wheel",
+    (e: WheelEvent) => {
+      // トラックパッドのピンチはブラウザに ctrlKey 付きのホイールとして届く。
+      // Ctrl + ホイール（マウス）も同じ扱いにする
+      if (e.ctrlKey) {
+        e.preventDefault(); // 押さえないとページ全体が拡大される
+        // 行単位で来る環境（Firefox など）は 1 行 ≒ 16px として揃える
+        const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        cancelPenStroke();
+        zoomAt(Math.exp(-dy / WHEEL_ZOOM_DIVISOR), e.clientX, e.clientY);
+        return;
+      }
+      // 拡大中の 2 本指スクロール（マウスならホイール）は表示位置の移動にする。
+      // 等倍のときは動かせる余地がないので、そのままブラウザにまかせる
+      if (scale === 1) return;
+      e.preventDefault();
+      const k = e.deltaMode === 1 ? 16 : 1;
+      tx -= e.deltaX * k;
+      ty -= e.deltaY * k;
+      apply();
+    },
+    { passive: false }
+  );
 }
 
 async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
