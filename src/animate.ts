@@ -100,7 +100,7 @@ export interface PlayOptions {
 
 export function playSubjects(
   finished: CanvasImageSource,
-  subjects: Subject[],
+  subjects: Subject[] | Promise<Subject[]>,
   opts: PlayOptions = {}
 ): Promise<void> {
   return new Promise((resolve) => {
@@ -117,6 +117,8 @@ export function playSubjects(
     const playBtn = document.createElement("button");
     playBtn.className = "nav-btn subject-play-btn";
     playBtn.textContent = "🦕 うごかす！";
+    // 主役を切り出せるか分かるまでは隠す（切り抜きの完了を待たずに絵を先に見せるため）
+    playBtn.hidden = true;
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "nav-btn subject-close";
@@ -147,40 +149,28 @@ export function playSubjects(
 
     const ctx = canvas.getContext("2d")!;
 
-    // 主役を抜いた背景を一度だけ作る（毎フレーム合成すると重い）
-    const bg = document.createElement("canvas");
-    bg.width = CANVAS_W;
-    bg.height = CANVAS_H;
-    const bgCtx = bg.getContext("2d")!;
-    bgCtx.drawImage(finished, 0, 0, CANVAS_W, CANVAS_H);
-    // 主役のいた場所をくり抜いて、空いた穴を紙の白で埋める
-    bgCtx.globalCompositeOperation = "destination-out";
-    for (const s of subjects) bgCtx.drawImage(s.canvas, 0, 0);
-    bgCtx.globalCompositeOperation = "destination-over";
-    bgCtx.fillStyle = "#ffffff";
-    bgCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    /** 止まっている間は完成した絵をそのまま見せる（切り抜きの継ぎ目も出ない） */
+    function drawStill() {
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.drawImage(finished, 0, 0, CANVAS_W, CANVAS_H);
+    }
+    // 切り抜き（主役の判定）が終わるのを待たず、まず完成した絵をそのまま見せる
+    drawStill();
 
     const m = MOTION[opts.motion ?? "hop"];
-
-    // 支点は はねる時だけ足もと（着地の潰れが自然に見える）。浮いている生き物は
-    // 中心を支点にしないと、かたむきが足を軸にした不自然な回転になる
-    const actors: Actor[] = subjects.map((s, i) => ({
-      subject: s,
-      pivotX: s.x + s.w / 2,
-      pivotY: m.squash > 0 ? s.y + s.h : s.y + s.h / 2,
-      phase: i * 0.5,
-      roarLeft: 0,
-      // 画面いっぱいの恐竜 (h/CANVAS_H≒0.9) で 0.75、小さな虫 (≒0.2) で 1.3 あたり
-      pitch: Math.min(1.35, Math.max(0.72, 1.45 - 0.78 * (s.h / CANVAS_H))),
-    }));
 
     let raf = 0;
     let running = false;
     let start = 0;
     let prev = 0;
+    let actors: Actor[] = [];
+    // 主役を抜いた背景（切り抜きが終わるまでは無い）
+    let bg: HTMLCanvasElement | null = null;
+    let closed = false;
 
     /** この画面を片付けて呼び出し元へ返す */
     function close() {
+      closed = true;
       cancelAnimationFrame(raf);
       overlay.remove();
       resolve();
@@ -216,7 +206,7 @@ export function playSubjects(
       prev = now;
 
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      ctx.drawImage(bg, 0, 0);
+      ctx.drawImage(bg!, 0, 0);
 
       for (const a of actors) {
         if (a.roarLeft > 0) a.roarLeft = Math.max(0, a.roarLeft - dt);
@@ -229,12 +219,6 @@ export function playSubjects(
         ctx.restore();
       }
       raf = requestAnimationFrame(frame);
-    }
-
-    /** 止まっている間は完成した絵をそのまま見せる（切り抜きの継ぎ目も出ない） */
-    function drawStill() {
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      ctx.drawImage(finished, 0, 0, CANVAS_W, CANVAS_H);
     }
 
     function setRunning(on: boolean) {
@@ -254,19 +238,42 @@ export function playSubjects(
       }
     }
 
-    // 主役を切り出せなかった作品では動かしようがないので、ボタンを出さずに
-    // 「作品を大きく見る画面」として使う
-    if (actors.length === 0) {
-      playBtn.remove();
-      hint.textContent = "";
-      drawStill();
-    } else {
-      setRunning(false);
+    // 切り抜き（主役の判定）は数百 ms かかることがあるので、待たずに絵を先に見せておき、
+    // 終わり次第「動かせる」と分かった作品だけボタンを出す
+    Promise.resolve(subjects).then((list) => {
+      if (closed) return;
+      actors = list.map((s, i) => ({
+        subject: s,
+        pivotX: s.x + s.w / 2,
+        pivotY: m.squash > 0 ? s.y + s.h : s.y + s.h / 2,
+        phase: i * 0.5,
+        roarLeft: 0,
+        // 画面いっぱいの恐竜 (h/CANVAS_H≒0.9) で 0.75、小さな虫 (≒0.2) で 1.3 あたり
+        pitch: Math.min(1.35, Math.max(0.72, 1.45 - 0.78 * (s.h / CANVAS_H))),
+      }));
+      // 主役を切り出せなかった作品では動かしようがないので、ボタンを出さずに
+      // 「作品を大きく見る画面」のままにする
+      if (actors.length === 0) return;
+
+      // 主役を抜いた背景を一度だけ作る（毎フレーム合成すると重い）
+      bg = document.createElement("canvas");
+      bg.width = CANVAS_W;
+      bg.height = CANVAS_H;
+      const bgCtx = bg.getContext("2d")!;
+      bgCtx.drawImage(finished, 0, 0, CANVAS_W, CANVAS_H);
+      // 主役のいた場所をくり抜いて、空いた穴を紙の白で埋める
+      bgCtx.globalCompositeOperation = "destination-out";
+      for (const s of list) bgCtx.drawImage(s.canvas, 0, 0);
+      bgCtx.globalCompositeOperation = "destination-over";
+      bgCtx.fillStyle = "#ffffff";
+      bgCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      playBtn.hidden = false;
       playBtn.addEventListener("click", () => {
         blip(running ? 420 : 780);
         setRunning(!running);
       });
-    }
+    });
 
     canvas.addEventListener("pointerdown", (e) => {
       if (!running) return;
