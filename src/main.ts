@@ -1312,10 +1312,11 @@ type ColoringStart =
 const ZOOM_MAX = 3;
 /** 指を離したときにこれ以下なら等倍に戻す。少しだけ広がったまま残らないように */
 const ZOOM_SNAP = 1.05;
-/** ホイール 1 目盛りぶんの拡大の効き具合。小さくすると 1 回で大きく変わる。
- *  トラックパッドのピンチは細かい値が連続で来るので、マウスの 1 目盛り (deltaY=100)
- *  が拡大しすぎない側に合わせてある */
-const WHEEL_ZOOM_DIVISOR = 300;
+/** ホイール 1 イベントぶんの拡大の効き具合。小さくすると 1 回で大きく変わる */
+const WHEEL_ZOOM_DIVISOR = 100;
+/** 1 イベントで見る deltaY の上限。トラックパッドのピンチは 1〜10 程度が連続で来るのに対し
+ *  マウスは 1 目盛りで 100 前後まとめて来るので、そのまま入れるとマウスだけ暴れる */
+const WHEEL_DELTA_MAX = 24;
 
 /**
  * ピンチで紙の一部を大きくして、細かいところを塗れるようにする。
@@ -1328,7 +1329,12 @@ const WHEEL_ZOOM_DIVISOR = 300;
  * はみだしガード・バケツ・もどす・「できた！」の合成もそのまま効く。
  * canvas を実際に拡大する実装に書き換えないこと。
  */
-function setupPinchZoom(stage: HTMLElement, inner: HTMLElement, engine: PaintEngine) {
+function setupPinchZoom(
+  stageWrap: HTMLElement,
+  stage: HTMLElement,
+  inner: HTMLElement,
+  engine: PaintEngine
+) {
   /** いま紙に触れている指。入れ替えても順番が変わらないので、最初の 2 本をピンチに使う */
   const touches = new Map<number, { x: number; y: number }>();
   let scale = 1;
@@ -1359,13 +1365,14 @@ function setupPinchZoom(stage: HTMLElement, inner: HTMLElement, engine: PaintEng
   };
 
   /** (clientX, clientY) にある紙の点を動かさずに倍率を factor 倍する。
-   *  指の中点を基準にするピンチと同じことを、ポインタ 1 点でやる */
+   *  指の中点を基準にするピンチと同じことを、ポインタ 1 点でやる。
+   *  カーソルが紙の外（上下の余白）にあるときは、いちばん近い紙の縁を基準にする */
   const zoomAt = (factor: number, clientX: number, clientY: number) => {
     const next = Math.min(ZOOM_MAX, Math.max(1, scale * factor));
     if (next === scale) return;
     const rect = stage.getBoundingClientRect();
-    const px = clientX - rect.left;
-    const py = clientY - rect.top;
+    const px = Math.min(rect.width, Math.max(0, clientX - rect.left));
+    const py = Math.min(rect.height, Math.max(0, clientY - rect.top));
     tx = px - ((px - tx) / scale) * next;
     ty = py - ((py - ty) / scale) * next;
     scale = next <= ZOOM_SNAP ? 1 : next;
@@ -1433,24 +1440,26 @@ function setupPinchZoom(stage: HTMLElement, inner: HTMLElement, engine: PaintEng
     engine.resumeStrokes();
   };
 
-  stage.addEventListener(
+  // ホイールは紙 (.stage) ではなく `.stage-wrap` で受ける。カーソルが紙から少し外れた
+  // だけで無反応になるのを防ぐため（紙は 4:3 なので上下に余白が出る）。パネルは含まないので、
+  // いろ・道具パネルの overflow-y スクロールはホイールに奪われない
+  stageWrap.addEventListener(
     "wheel",
     (e: WheelEvent) => {
-      // トラックパッドのピンチはブラウザに ctrlKey 付きのホイールとして届く。
-      // Ctrl + ホイール（マウス）も同じ扱いにする
-      if (e.ctrlKey) {
+      // 行単位で来る環境（Firefox など）は 1 行 ≒ 16px として揃える
+      const k = e.deltaMode === 1 ? 16 : 1;
+      // macOS は 2 本指の動きをピンチとスクロールに振り分けるが、広げる角度によっては
+      // ピンチのつもりでもスクロール (ctrlKey 無し) として届く。等倍のときは動かす余地が
+      // 無く移動に使い道がないので、そのまま拡大に回して「無反応」をなくす
+      if (e.ctrlKey || scale === 1) {
         e.preventDefault(); // 押さえないとページ全体が拡大される
-        // 行単位で来る環境（Firefox など）は 1 行 ≒ 16px として揃える
-        const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        const dy = Math.max(-WHEEL_DELTA_MAX, Math.min(WHEEL_DELTA_MAX, e.deltaY * k));
         cancelPenStroke();
         zoomAt(Math.exp(-dy / WHEEL_ZOOM_DIVISOR), e.clientX, e.clientY);
         return;
       }
-      // 拡大中の 2 本指スクロール（マウスならホイール）は表示位置の移動にする。
-      // 等倍のときは動かせる余地がないので、そのままブラウザにまかせる
-      if (scale === 1) return;
+      // 拡大中の 2 本指スクロール（マウスならホイール）は表示位置の移動にする
       e.preventDefault();
-      const k = e.deltaMode === 1 ? 16 : 1;
       tx -= e.deltaX * k;
       ty -= e.deltaY * k;
       apply();
@@ -1510,7 +1519,7 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
 
   const engine = new PaintEngine(paintCanvas);
   engine.setGuardThreshold(loadGuardThreshold());
-  setupPinchZoom(stage, stageInner, engine);
+  setupPinchZoom(stageWrap, stage, stageInner, engine);
 
   // ---- 自動保存 (debounce) ----
   let saveTimer: number | null = null;
