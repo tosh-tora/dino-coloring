@@ -3,7 +3,8 @@
 // 抽出そのものは下絵だけで決まるので、結果は下絵 id ごとに IndexedDB へキャッシュする。
 // 完成作品は子どもの塗りによって毎回変わるが、切り抜きに使うマスクは同じものを使える。
 
-import { extractSubjectMasks } from "./cutout";
+import { extractSubjectMasks, type SubjectMask } from "./cutout";
+import type { CutoutRequest, CutoutResponse } from "./cutout.worker";
 import { CANVAS_W, CANVAS_H, loadLineArtImage, type LineArt } from "./lineart";
 import * as store from "./store";
 
@@ -25,6 +26,52 @@ export interface Subject {
   w: number;
   h: number;
   confidence: number;
+}
+
+// extractSubjectMasks は 1024x768 で数秒かかる同期処理なので、Worker で走らせて
+// メインスレッド（お絵かき中の操作や「できた！」の紙吹雪）を止めないようにする。
+// Worker を作れない環境（file:// 起動や CSP など）ではその場で呼ぶフォールバックに落ちる。
+let worker: Worker | null | undefined;
+let nextRequestId = 0;
+const pending = new Map<number, { resolve: (m: SubjectMask[]) => void; reject: (e: unknown) => void }>();
+
+function getWorker(): Worker | null {
+  if (worker !== undefined) return worker;
+  try {
+    worker = new Worker(new URL("./cutout.worker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (e: MessageEvent<CutoutResponse>) => {
+      const req = pending.get(e.data.id);
+      if (!req) return;
+      pending.delete(e.data.id);
+      req.resolve(e.data.masks);
+    };
+    worker.onerror = (e) => {
+      // 起きているリクエスト全部をフォールバックへ流す。以降の呼び出しも
+      // フォールバック固定にする（壊れた Worker を使い続けても仕方ないため）
+      for (const req of pending.values()) req.reject(e);
+      pending.clear();
+      worker = null;
+    };
+  } catch {
+    worker = null;
+  }
+  return worker;
+}
+
+/** Worker があればそちらで、無ければメインスレッドで抽出する */
+function extractMasks(alpha: Uint8Array, w: number, h: number): Promise<SubjectMask[]> {
+  const w2 = getWorker();
+  if (!w2) return Promise.resolve(extractSubjectMasks(alpha, w, h));
+
+  const id = nextRequestId++;
+  return new Promise<SubjectMask[]>((resolve) => {
+    // Worker が落ちたときは reject ではなく、その場でメインスレッド計算にフォールバックする
+    pending.set(id, { resolve, reject: () => resolve(extractSubjectMasks(alpha, w, h)) });
+    // alpha はここでしか使わないので転送してコピーを避ける
+    const buf = alpha.buffer.slice(alpha.byteOffset, alpha.byteOffset + alpha.byteLength) as ArrayBuffer;
+    const req: CutoutRequest = { id, alpha: buf, w, h };
+    w2.postMessage(req, [buf]);
+  });
 }
 
 function newCanvas(w: number, h: number): HTMLCanvasElement {
@@ -64,7 +111,8 @@ async function extract(art: LineArt): Promise<store.CutoutSubject[]> {
   const alpha = new Uint8Array(CANVAS_W * CANVAS_H);
   for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
 
-  return extractSubjectMasks(alpha, CANVAS_W, CANVAS_H).map((s) => ({
+  const masks = await extractMasks(alpha, CANVAS_W, CANVAS_H);
+  return masks.map((s) => ({
     maskUrl: maskToDataUrl(s.mask, CANVAS_W, CANVAS_H),
     x: s.x,
     y: s.y,
