@@ -16,6 +16,10 @@ const LINE_OVERLAP = 20;
 /** ストローク開始点が線の上だったとき、近くの空きピクセルを探す半径 (px) */
 const SEED_SEARCH = 24;
 
+/** バケツで塗ってからこの時間内に cancelStroke() が来たら、その 1 発を取り消す (ms)。
+ *  ピンチの 1 本目の指が置かれた瞬間に塗りつぶしが起きてしまうため */
+const FILL_UNDO_GRACE = 400;
+
 export class PaintEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -37,6 +41,11 @@ export class PaintEngine {
 
   private activePointer: number | null = null;
   private points: { x: number; y: number }[] = [];
+  /** ピンチ操作中は塗らない。activePointer を消すだけだと、ピンチ中に指を 1 本残したまま
+   *  動かしたときに新しいストロークが始まってしまうので、全部の指が離れるまで止める */
+  private suspended = false;
+  /** バケツで最後に塗りつぶした時刻。ピンチ開始時にその 1 発を取り消すために見る */
+  private lastFillAt = 0;
 
   // はみだしガード: 線画から作る障壁マップと、ストローク中の塗り許可マスク
   /** 1 = 線 (障壁)。setLineart で線画レイヤーから作る */
@@ -132,6 +141,7 @@ export class PaintEngine {
   }
 
   private onDown = (e: PointerEvent) => {
+    if (this.suspended) return; // ピンチ中
     // 2 本目以降の指は無視（簡易パーム対策）
     if (this.activePointer !== null) return;
 
@@ -188,6 +198,47 @@ export class PaintEngine {
     this.lastInside = null;
     this.onStrokeEnd?.();
   };
+
+  // ---------------------------------------------------------------- pinch
+
+  /** ピンチが始まったときに呼ぶ。2 本目の指が触れる前に 1 本目が引いてしまった線を
+   *  なかったことにして、指が全部離れるまで塗りを止める（→ resumeStrokes）。 */
+  cancelStroke() {
+    this.suspended = true;
+
+    if (this.activePointer !== null) {
+      try {
+        this.canvas.releasePointerCapture(this.activePointer);
+      } catch {
+        // capture が外れていても状態のリセットは続ける
+      }
+      this.activePointer = null;
+      // ストローク開始時のスナップショットに戻す（undo は積まない = 取り消しではなく無かったこと）
+      if (this.preStroke) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(this.preStroke, 0, 0);
+        this.preStroke = null;
+      }
+      this.points = [];
+      this.mask = null;
+      this.lastInside = null;
+      this.hasAccum = false;
+      this.onStrokeEnd?.(); // 塗り音を止め、ツールバーを更新する
+      return;
+    }
+
+    // バケツは触れた瞬間に塗り終わっているので、ストロークのように巻き戻せない。
+    // 直前の 1 発だけ undo で戻す
+    if (this.fillTool && Date.now() - this.lastFillAt < FILL_UNDO_GRACE) {
+      this.lastFillAt = 0;
+      this.undo();
+    }
+  }
+
+  /** 指がすべて離れたら塗りを再開する */
+  resumeStrokes() {
+    this.suspended = false;
+  }
 
   // ---------------------------------------------------------------- guard
 
@@ -247,6 +298,7 @@ export class PaintEngine {
     this.compositeStroke();
 
     this.pushUndo(snap);
+    this.lastFillAt = Date.now();
     return true;
   }
 
