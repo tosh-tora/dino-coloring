@@ -1307,11 +1307,15 @@ type ColoringStart =
   /** 完成作品を塗り直す。「できた！」でこの作品を上書きする */
   | { kind: "reedit"; item: store.GalleryItem };
 
-/** むしめがねの倍率 */
-const ZOOM = 2;
+/** ピンチで広げられる最大倍率。canvas は 1024x768 のままなので、これ以上広げると
+ *  線がドットに見えてくる（4 倍でがたつきが目立つ） */
+const ZOOM_MAX = 3;
+/** 指を離したときにこれ以下なら等倍に戻す。少しだけ広がったまま残らないように */
+const ZOOM_SNAP = 1.05;
 
 /**
- * むしめがね: 紙の一部を大きくして、細かいところを塗れるようにする。
+ * ピンチで紙の一部を大きくして、細かいところを塗れるようにする。
+ * 2 本指を広げる＝拡大、縮める＝縮小、2 本指のまま動かす＝表示位置の移動。
  *
  * 拡大は .stage-inner への CSS transform だけで行う。PaintEngine の座標変換は
  * canvas の getBoundingClientRect() 基準（＝祖先の transform が反映された矩形）なので、
@@ -1319,65 +1323,83 @@ const ZOOM = 2;
  * はみだしガード・バケツ・もどす・「できた！」の合成もそのまま効く。
  * canvas を実際に拡大する実装に書き換えないこと。
  */
-function setupZoom(btn: HTMLButtonElement, stage: HTMLElement, inner: HTMLElement) {
-  let zoomed = false;
-  let pick: HTMLElement | null = null;
+function setupPinchZoom(stage: HTMLElement, inner: HTMLElement, engine: PaintEngine) {
+  /** いま紙に触れている指。入れ替えても順番が変わらないので、最初の 2 本をピンチに使う */
+  const touches = new Map<number, { x: number; y: number }>();
+  let scale = 1;
+  let tx = 0;
+  let ty = 0;
+  /** ピンチ開始時の指の間隔・中点・そのときの表示。ここからの差分で今の表示を決める */
+  let from: { dist: number; cx: number; cy: number; scale: number; tx: number; ty: number } | null =
+    null;
 
-  const render = () => {
-    btn.textContent = zoomed ? "🔎" : "🔍";
-    btn.classList.toggle("selected", zoomed || pick !== null);
-    btn.title = zoomed ? "もとの おおきさに もどす" : "おおきくする";
+  /** 最初の 2 本の指の間隔と中点（紙の左上からの px） */
+  const gesture = () => {
+    const [a, b] = [...touches.values()];
+    const rect = stage.getBoundingClientRect();
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      cx: (a.x + b.x) / 2 - rect.left,
+      cy: (a.y + b.y) / 2 - rect.top,
+    };
   };
-  render();
 
-  const closePick = () => {
-    pick?.remove();
-    pick = null;
+  const apply = () => {
+    // 紙 (.stage) の外に白い余白が見えないよう、はみ出せる範囲に収める
+    const maxX = (scale - 1) * stage.clientWidth;
+    const maxY = (scale - 1) * stage.clientHeight;
+    tx = Math.min(0, Math.max(-maxX, tx));
+    ty = Math.min(0, Math.max(-maxY, ty));
+    inner.style.transform = scale === 1 ? "" : `translate(${tx}px, ${ty}px) scale(${scale})`;
   };
 
-  btn.addEventListener("click", () => {
-    // 場所を選んでいる最中にもう一度押されたら、選ぶのをやめる
-    if (pick) {
-      blip(420);
-      closePick();
-      render();
+  const onDown = (e: PointerEvent) => {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // 2 本目が触れた時点でピンチとみなす。1 本目がすでに引いてしまった線は無かったことにする
+    if (touches.size === 2) engine.cancelStroke();
+  };
+
+  const onMove = (e: PointerEvent) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size < 2) return;
+    const now = gesture();
+    // 指が 1 本になってからまた 2 本になった場合もここで組み直す
+    if (!from) {
+      from = { ...now, scale, tx, ty };
       return;
     }
-    if (zoomed) {
-      blip(500);
-      zoomed = false;
-      inner.style.transform = "";
-      inner.style.transformOrigin = "";
-      render();
-      return;
-    }
+    if (from.dist <= 0) return;
+    scale = Math.min(ZOOM_MAX, Math.max(1, (from.scale * now.dist) / from.dist));
+    // 指の中点にある紙の点を、動いた先の中点へ連れていく（＝つまんだ所が指について動く）
+    tx = now.cx - ((from.cx - from.tx) / from.scale) * scale;
+    ty = now.cy - ((from.cy - from.ty) / from.scale) * scale;
+    apply();
+  };
 
-    // 拡大したい場所を 1 回タップしてもらう。その間だけ紙の前面に透明な板を置くので、
-    // 選ぶためのタップが塗りレイヤーに届かない（線が引かれてしまわない）
-    blip(720);
-    const el = document.createElement("div");
-    el.className = "zoom-pick";
-    const label = document.createElement("span");
-    label.className = "zoom-pick-label";
-    label.textContent = "おおきくしたい ところを タップしてね";
-    el.appendChild(label);
-    el.addEventListener("pointerdown", (e) => {
-      const rect = el.getBoundingClientRect();
-      const px = ((e.clientX - rect.left) / rect.width) * 100;
-      const py = ((e.clientY - rect.top) / rect.height) * 100;
-      // タップした点を動かさずに広げるので、紙の外の余白が見えることは起こらない
-      // （＝はみ出しを抑えるためのクランプ計算が要らない）
-      inner.style.transformOrigin = `${px}% ${py}%`;
-      inner.style.transform = `scale(${ZOOM})`;
-      zoomed = true;
-      closePick();
-      render();
-      blip(880);
-    });
-    pick = el;
-    stage.appendChild(el);
-    render();
-  });
+  const onUp = (e: PointerEvent) => {
+    if (!touches.delete(e.pointerId)) return;
+    if (touches.size < 2) from = null;
+    if (touches.size > 0) return;
+    // ほぼ等倍まで縮めたら、ぴったり等倍に戻す
+    if (scale <= ZOOM_SNAP) {
+      scale = 1;
+      tx = 0;
+      ty = 0;
+      apply();
+    }
+    engine.resumeStrokes();
+  };
+
+  // canvas は 1 本目の指を setPointerCapture するが、捕捉した要素は stage の子なので
+  // 2 本目以降も含めて全部の指のイベントがここを通る。
+  // capture フェーズで受けるのは、2 本目が触れた瞬間の cancelStroke() を canvas 側の
+  // pointerdown より先に走らせるため（バケツが 2 本目の指でもう一度塗ってしまうのを防ぐ）
+  const opts = { capture: true };
+  stage.addEventListener("pointerdown", onDown, opts);
+  stage.addEventListener("pointermove", onMove, opts);
+  stage.addEventListener("pointerup", onUp, opts);
+  stage.addEventListener("pointercancel", onUp, opts);
 }
 
 async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
@@ -1399,12 +1421,10 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   const artTitle = document.createElement("span");
   artTitle.className = "art-title";
   artTitle.textContent = art.name;
-  const zoomBtn = document.createElement("button");
-  zoomBtn.className = "nav-btn zoom-btn";
   const doneBtn = document.createElement("button");
   doneBtn.className = "nav-btn done-btn";
   doneBtn.textContent = "🎉 できた！";
-  header.append(backBtn, artTitle, zoomBtn, makeMuteButton(), doneBtn);
+  header.append(backBtn, artTitle, makeMuteButton(), doneBtn);
   screen.appendChild(header);
 
   // ---- 中央: 2 レイヤー canvas ----
@@ -1415,7 +1435,7 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   stageWrap.className = "stage-wrap";
   const stage = document.createElement("div");
   stage.className = "stage";
-  // 拡大するのはこの内側だけ。紙 (.stage) の大きさと overflow:hidden は据え置きで、
+  // ピンチで拡大するのはこの内側だけ。紙 (.stage) の大きさと overflow:hidden は据え置きで、
   // はみ出したぶんが切り取られる
   const stageInner = document.createElement("div");
   stageInner.className = "stage-inner";
@@ -1430,10 +1450,10 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   stageInner.append(paintCanvas, lineartCanvas);
   stage.appendChild(stageInner);
   stageWrap.appendChild(stage);
-  setupZoom(zoomBtn, stage, stageInner);
 
   const engine = new PaintEngine(paintCanvas);
   engine.setGuardThreshold(loadGuardThreshold());
+  setupPinchZoom(stage, stageInner, engine);
 
   // ---- 自動保存 (debounce) ----
   let saveTimer: number | null = null;
