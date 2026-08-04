@@ -502,7 +502,7 @@ body {
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
 }
 
-/* ぬりえのせってい: はみだしガードのスライダー */
+/* 塗り絵の設定: はみだしガードのスライダー */
 .guard-sub {
   font-size: 20px;
   color: #3a7a52;
@@ -529,7 +529,7 @@ body {
   color: #2c5237;
 }
 
-/* ぬりえのせってい: 見せるレベルのチェックボックス */
+/* 塗り絵の設定: 見せるレベルのチェックボックス */
 .level-checks {
   display: flex;
   flex-wrap: wrap;
