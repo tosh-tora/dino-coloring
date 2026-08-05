@@ -342,6 +342,27 @@
       "category": "cat-dino",
       "file": "shared-triceratops-vs-trex-2.png",
       "level": 3
+    },
+    {
+      "id": "shared-hercules-beetle-2",
+      "name": "ヘラクレスオオカブト",
+      "category": "cat-animal",
+      "file": "shared-hercules-beetle-2.png",
+      "level": 2
+    },
+    {
+      "id": "shared-therizinosaurus",
+      "name": "テリジノサウルス",
+      "category": "cat-dino",
+      "file": "shared-therizinosaurus.png",
+      "level": 2
+    },
+    {
+      "id": "shared-edmontonia",
+      "name": "エドモントニア",
+      "category": "cat-dino",
+      "file": "shared-edmontonia.png",
+      "level": 2
     }
   ]
 }
