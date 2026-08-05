@@ -5,11 +5,6 @@ import stegosaurusSvg from "../assets/lineart/stegosaurus.svg?raw";
 import brachiosaurusSvg from "../assets/lineart/brachiosaurus.svg?raw";
 import pteranodonSvg from "../assets/lineart/pteranodon.svg?raw";
 import eggBabySvg from "../assets/lineart/egg-baby.svg?raw";
-import spinosaurusSvg from "../assets/lineart/spinosaurus.svg?raw";
-import ankylosaurusSvg from "../assets/lineart/ankylosaurus.svg?raw";
-import pachycephalosaurusSvg from "../assets/lineart/pachycephalosaurus.svg?raw";
-import trexSideSvg from "../assets/lineart/trex-side.svg?raw";
-import triceratopsSideSvg from "../assets/lineart/triceratops-side.svg?raw";
 import mammothSvg from "../assets/lineart/mammoth.svg?raw";
 import titanoboaSvg from "../assets/lineart/titanoboa.svg?raw";
 import purussaurusSvg from "../assets/lineart/purussaurus.svg?raw";
@@ -17,8 +12,6 @@ import fishSvg from "../assets/lineart/fish.svg?raw";
 import flowerSvg from "../assets/lineart/flower.svg?raw";
 import rocketSvg from "../assets/lineart/rocket.svg?raw";
 import butterflySvg from "../assets/lineart/butterfly.svg?raw";
-import therizinosaurusSvg from "../assets/lineart/therizinosaurus.svg?raw";
-import argentinosaurusSvg from "../assets/lineart/argentinosaurus.svg?raw";
 import { BUILTIN_CATEGORY } from "./categories";
 import type { Level } from "./level-core";
 
@@ -55,11 +48,6 @@ const catalogBase: Omit<LineArt, "category">[] = [
   { id: "brachiosaurus", name: "ブラキオサウルス", svg: brachiosaurusSvg },
   { id: "pteranodon", name: "プテラノドン", svg: pteranodonSvg },
   { id: "egg-baby", name: "たまごのあかちゃん", svg: eggBabySvg },
-  { id: "spinosaurus", name: "スピノサウルス", svg: spinosaurusSvg },
-  { id: "ankylosaurus", name: "アンキロサウルス", svg: ankylosaurusSvg },
-  { id: "pachycephalosaurus", name: "パキケファロサウルス", svg: pachycephalosaurusSvg },
-  { id: "trex-side", name: "ティラノサウルス（よこ）", svg: trexSideSvg },
-  { id: "triceratops-side", name: "トリケラトプス（よこ）", svg: triceratopsSideSvg },
   { id: "mammoth", name: "マンモス", svg: mammothSvg },
   { id: "titanoboa", name: "ティタノボア", svg: titanoboaSvg },
   { id: "purussaurus", name: "プルスサウルス", svg: purussaurusSvg },
@@ -67,8 +55,6 @@ const catalogBase: Omit<LineArt, "category">[] = [
   { id: "flower", name: "おはな", svg: flowerSvg },
   { id: "rocket", name: "ロケット", svg: rocketSvg },
   { id: "butterfly", name: "ちょうちょ", svg: butterflySvg },
-  { id: "therizinosaurus", name: "テリジノサウルス", svg: therizinosaurusSvg },
-  { id: "argentinosaurus", name: "アルゼンチノサウルス", svg: argentinosaurusSvg },
 ];
 
 export const catalog: LineArt[] = catalogBase.map((a) => ({

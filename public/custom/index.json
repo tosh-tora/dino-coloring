@@ -43,32 +43,11 @@
       "level": 2
     },
     {
-      "id": "shared-pachycephalosaurus-realistic",
-      "name": "パキケファロサウルス",
-      "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-realistic.png",
-      "level": 3
-    },
-    {
-      "id": "shared-hercules-beetle",
-      "name": "ヘラクレスオオカブト",
-      "category": "cat-animal",
-      "file": "shared-hercules-beetle.png",
-      "level": 3
-    },
-    {
       "id": "shared-snake",
       "name": "へび",
       "category": "cat-animal",
       "file": "shared-snake.png",
       "level": 3
-    },
-    {
-      "id": "shared-stegosaurus",
-      "name": "ステゴサウルス",
-      "category": "cat-dino",
-      "file": "shared-stegosaurus.png",
-      "level": 2
     },
     {
       "id": "shared-pteranodon",
@@ -99,13 +78,6 @@
       "level": 3
     },
     {
-      "id": "shared-parasaurolophus",
-      "name": "パラサウロロフス",
-      "category": "cat-dino",
-      "file": "shared-parasaurolophus.png",
-      "level": 3
-    },
-    {
       "id": "shared-quetzalcoatlus-titled",
       "name": "ケツァルコアトルス",
       "category": "cat-dino",
@@ -120,38 +92,10 @@
       "level": 3
     },
     {
-      "id": "shared-stegosaurus-realistic",
-      "name": "ステゴサウルス",
-      "category": "cat-dino",
-      "file": "shared-stegosaurus-realistic.png",
-      "level": 3
-    },
-    {
-      "id": "shared-trex-volcano",
-      "name": "ティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-trex-volcano.png",
-      "level": 3
-    },
-    {
-      "id": "shared-ankylosaurus-vs-trex-realistic",
-      "name": "アンキロサウルス vs ティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-ankylosaurus-vs-trex-realistic.png",
-      "level": 3
-    },
-    {
       "id": "shared-triceratops-volcano",
       "name": "トリケラトプス",
       "category": "cat-dino",
       "file": "shared-triceratops-volcano.png",
-      "level": 3
-    },
-    {
-      "id": "shared-pachycephalosaurus-parent",
-      "name": "パキケファロサウルス おやこ",
-      "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-parent.png",
       "level": 3
     },
     {
@@ -279,13 +223,6 @@
       "category": "cat-animal",
       "file": "shared-lion.png",
       "level": 2
-    },
-    {
-      "id": "shared-giganotosaurus-trex",
-      "name": "ギガノトサウルスとティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-giganotosaurus-trex.png",
-      "level": 3
     },
     {
       "id": "shared-parasaurolophus-scene",
