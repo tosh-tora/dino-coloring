@@ -47,7 +47,6 @@ const FLAP_PER_SEC = 2.5;
 // 「とぶ / およぐ」は絵そのものの性質なので、大人が変えられる分類より下絵の id を先に見る。
 // ここに無い下絵（アップロード画像を含む）は、これまで通り はねる。
 const FLY_IDS = new Set([
-  "pteranodon",
   "butterfly",
   "rocket",
   "shared-pteranodon",
@@ -61,8 +60,6 @@ const FLY_IDS = new Set([
 // ぜつめつどうぶつに分類されているので id で挙げる
 const SWIM_IDS = new Set([
   "fish",
-  "titanoboa",
-  "purussaurus",
   "shared-megalodon",
   "shared-megalodon-simple",
 ]);

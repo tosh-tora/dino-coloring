@@ -29,10 +29,10 @@
       "level": 2
     },
     {
-      "id": "shared-ankylosaurus-vs-trex",
+      "id": "shared-ankylosaurus-vs-trex-realistic",
       "name": "アンキロサウルス vs ティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-ankylosaurus-vs-trex.png",
+      "file": "shared-ankylosaurus-vs-trex-realistic.png",
       "level": 3
     },
     {
@@ -92,13 +92,6 @@
       "level": 3
     },
     {
-      "id": "shared-triceratops-volcano",
-      "name": "トリケラトプス",
-      "category": "cat-dino",
-      "file": "shared-triceratops-volcano.png",
-      "level": 3
-    },
-    {
       "id": "shared-stegosaurus-parent",
       "name": "ステゴサウルス おやこ",
       "category": "cat-dino",
@@ -111,13 +104,6 @@
       "category": "cat-dino",
       "file": "shared-ornithomimus.png",
       "level": 1
-    },
-    {
-      "id": "shared-ornithomimus-scene",
-      "name": "オルニトミムス",
-      "category": "cat-dino",
-      "file": "shared-ornithomimus-scene.png",
-      "level": 2
     },
     {
       "id": "shared-mosasaurus",
