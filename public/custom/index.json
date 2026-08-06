@@ -286,6 +286,27 @@
       "category": "cat-dino",
       "file": "shared-edmontonia.png",
       "level": 2
+    },
+    {
+      "id": "shared-diplodocus",
+      "name": "ディプロドクス",
+      "category": "cat-dino",
+      "file": "shared-diplodocus.png",
+      "level": 2
+    },
+    {
+      "id": "shared-futabasaurus",
+      "name": "フタバスズキリュウ",
+      "category": "cat-sea",
+      "file": "shared-futabasaurus.png",
+      "level": 1
+    },
+    {
+      "id": "shared-archaeopteryx",
+      "name": "アーケオプテリクス",
+      "category": "cat-dino",
+      "file": "shared-archaeopteryx.png",
+      "level": 3
     }
   ]
 }
