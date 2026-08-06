@@ -163,8 +163,8 @@
     },
     {
       "id": "shared-megalodon",
-      "name": "メガロドン",
-      "category": "cat-extinct",
+      "name": "ホオジロザメ",
+      "category": "cat-sea",
       "file": "shared-megalodon.png",
       "level": 2
     },
@@ -219,7 +219,7 @@
     },
     {
       "id": "shared-giganotosaurus-triceratops",
-      "name": "ギガノトサウルスとトリケラトプス",
+      "name": "ギガノト vs ティラノ vs トリケラ",
       "category": "cat-dino",
       "file": "shared-giganotosaurus-triceratops.png",
       "level": 2

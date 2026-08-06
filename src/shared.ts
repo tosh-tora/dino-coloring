@@ -43,6 +43,9 @@ export async function loadSharedArts(): Promise<LineArt[]> {
 
   return (cache = items
     .filter((it) => it?.id && it?.file)
+    // マニフェストには追加した順（古い→新しい）で並んでいるので、逆順にして
+    // 新しく追加した下絵ほどギャラリーの先頭（第一画面の上）に出るようにする。
+    .reverse()
     .map((it) => ({
       id: it.id,
       name: it.name ?? "ぬりえ",
