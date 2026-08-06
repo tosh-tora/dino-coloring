@@ -271,7 +271,7 @@ async function showLibrary() {
     if (local) {
       bindTrashLongPress(
         card,
-        3000,
+        1600,
         () => confirmDelete(1),
         async () => {
           await store.deleteTemplate(art.id).catch(() => {});
@@ -1835,7 +1835,7 @@ async function showGallery() {
     });
     bindTrashLongPress(
       cell,
-      3000,
+      1600,
       () => confirmDelete(1),
       () => {
         if (item.id !== undefined) void removeItems([item.id]);
