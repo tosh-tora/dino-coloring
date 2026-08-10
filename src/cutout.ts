@@ -6,7 +6,7 @@
 //
 // 手前の草に隠れて輪郭が途切れている絵が多いため、塗りつぶす前にクロージングで断片を
 // 繋ぐ。この 2 つの半径の最適値は絵ごとに大きく違うので、組み合わせを総当たりし、
-// 「シルエットの縁がどれだけ太線の上に乗っているか」(outlineCoverage) が最も高いものを
+// 「シルエットの縁がどれだけ太線の上に乗っているか」(edgeCoverage) が最も高いものを
 // 採用する。線幅が主役と背景で変わらない絵は原理的に分離できず、confidence が下がる。
 //
 // 中核 (extractSubjectMasks) は DOM に依存しない純関数にしてある。しきい値の調整を
@@ -44,10 +44,17 @@ const MIN_SOLIDITY = 0.25;
 /**
  * シルエットの細いくびれを切る半径（1024px 幅基準）。線幅が主役と背景で同じ絵では、
  * 生き物に「触れている」だけの雲や草まで輪郭が繋がって一体化してしまう。接触部分は
- * 線 2 本ぶんの細い橋にしかならないので、この半径で開いて胴体だけを残し、
- * 元のシルエットの範囲内へ膨らませ直すことで、触れているだけの背景を落とす。
+ * 線 2 本ぶんの細い橋にしかならないので、この半径で開いて胴体と背景を別々のかたまりに
+ * 分け、シルエットの画素をいちばん近いかたまりへ割り当て直して背景を落とす。
  */
 const SEVER_R = 7;
+/**
+ * 切り分けたあと、かたまりから何 px 先までシルエットを戻すか（1024px 幅基準）。
+ * くちばし・翼・とさかの先のように細くて kernel に残らない部分は、たかだかこのくらいしか
+ * 本体から離れていない（同梱の下絵の実測では最遠でも 51px）。いっぽう地面や氷の稜線の
+ * ような「細いまま画面を横切る線」は数百 px 伸びるので、ここで打ち切って背景として捨てる。
+ */
+const SEVER_REACH = 60;
 /**
  * 切り分けたあと、最大のかたまりのこの割合以上を主役候補として残す。
  * 隣り合う 2 体目を拾いつつ、触れているだけの草や石は落とせる値にしてある。
@@ -64,6 +71,13 @@ const STRONG_INK_RATIO = 0.15;
  * 生き物の一部（切り落とされた頭など）とみなす。
  */
 const BODY_PART_COVERAGE = 0.7;
+/**
+ * 逆に、増える領域を「欠けていた体が戻ってきた」と認めるのに要る割合。
+ * 手放す側より厳しい理由は addsOnlyBody を参照。
+ */
+const GROW_BODY_COVERAGE = 0.95;
+/** 大きいシルエットへ乗り換えるときに許す、シルエット全体の輪郭一致率の下がりしろ */
+const GROW_SCORE_DROP = 0.005;
 
 export interface SubjectMask {
   /** 1 = 主役。長さ w*h */
@@ -301,27 +315,64 @@ function clippedArea(joined: Uint8Array, w: number, h: number, r: number): numbe
  * シルエットを細いくびれで切り分ける。
  *
  * 開く（＝細い橋を断ち切る）と、触れているだけの背景も、隣り合って立っている 2 体目も
- * 別のかたまりになる。それぞれを元のシルエットの内側に限って膨らませ直して返す。
- * 無制限に再構成すると橋を渡って元に戻ってしまうので、膨張は切った半径ぶんに留める。
+ * 別のかたまり（core）になる。そのあとシルエットの画素を「いちばん近い core」へ
+ * 割り当て直し、十分な大きさの core のぶんだけを返す。小さい core は草や石なので落とす。
+ * 呼び出し側がさらに measure() で主役として妥当かを見る。
  *
- * 返すのは十分な大きさのかたまりだけ。小さいものは草や石なので落とす。呼び出し側が
- * さらに measure() で主役として妥当かを見る。
+ * 距離はシルエットの内側だけを通って測る（core を種にした多点 BFS）。以前のように膨張で
+ * 戻すと、くびれより細い先端 — くちばし・翼・とさかの先 — が core から届かず永久に欠けた。
+ * 戻すのは reach px 先まで。core を持てないほど細い背景（幅 2r+1 px 未満）はここで本体に
+ * 吸われてしまうが、地面や氷の稜線のように長く伸びる線は reach で頭打ちになる。
  */
-function severThinBridges(sil: Uint8Array, w: number, h: number, r: number): Uint8Array[] {
+function severThinBridges(
+  sil: Uint8Array,
+  w: number,
+  h: number,
+  r: number,
+  reach: number
+): Uint8Array[] {
   const core = erode(sil, w, h, r);
   const comps = connectedComponents(core, w, h);
   if (comps.length === 0) return [sil]; // 全部削れるほど細い ＝ 切るものが無い
   comps.sort((a, b) => b.pixels.length - a.pixels.length);
 
+  // すべての core を同時に広げるので、橋の上では両側からの距離が等しいところで分かれる
+  const label = new Int32Array(w * h).fill(-1);
+  const dist = new Int32Array(w * h);
+  const queue = new Int32Array(w * h);
+  let head = 0;
+  let tail = 0;
+  comps.forEach((comp, i) => {
+    for (const p of comp.pixels) {
+      label[p] = i;
+      queue[tail++] = p;
+    }
+  });
+  while (head < tail) {
+    const p = queue[head++];
+    if (dist[p] >= reach) continue;
+    const px = p % w;
+    const py = (p - px) / w;
+    const push = (q: number) => {
+      if (sil[q] === 1 && label[q] === -1) {
+        label[q] = label[p];
+        dist[q] = dist[p] + 1;
+        queue[tail++] = q;
+      }
+    };
+    if (px > 0) push(p - 1);
+    if (px < w - 1) push(p + 1);
+    if (py > 0) push(p - w);
+    if (py < h - 1) push(p + w);
+  }
+
   const minCore = comps[0].pixels.length * SEVER_KEEP_RATIO;
   const out: Uint8Array[] = [];
-  for (const comp of comps) {
-    if (comp.pixels.length < minCore) break;
+  for (let i = 0; i < comps.length; i++) {
+    if (comps[i].pixels.length < minCore) break;
     const part = new Uint8Array(w * h);
-    for (const p of comp.pixels) part[p] = 1;
-    const grown = dilate(part, w, h, r);
-    for (let i = 0; i < grown.length; i++) grown[i] = grown[i] === 1 && sil[i] === 1 ? 1 : 0;
-    out.push(grown);
+    for (let p = 0; p < part.length; p++) if (label[p] === i) part[p] = 1;
+    out.push(part);
   }
   return out;
 }
@@ -358,28 +409,31 @@ function measure(mask: Uint8Array, w: number, h: number): SubjectMask | null {
 }
 
 /**
- * シルエットの縁が太い線の上に乗っている割合を測る。
+ * 領域の縁が線（near）の上に乗っている割合を測る。
  *
  * 塗りつぶしは必ず何らかの線で止まるが、主役の輪郭に沿って止まったのか、背景の細い草に
  * 沿って止まったのかはこれで見分けられる。太い線＝主役の輪郭なので、一致率が高いほど
- * 「生き物のかたちで切り抜けている」ことになる。半径の組み合わせを選ぶ物差しに使う。
+ * 「生き物のかたちで切り抜けている」ことになる。シルエット全体に使えば半径の組み合わせを
+ * 選ぶ物差しに、候補同士の差分に使えば「そこは体の一部か背景か」の判定になる。
  */
-function outlineCoverage(
-  sil: Uint8Array,
-  nearThick: Uint8Array,
-  w: number,
-  h: number
-): number {
-  const inner = erode(sil, w, h, 1);
+function edgeCoverage(region: Uint8Array, near: Uint8Array, w: number, h: number): number {
+  const inner = erode(region, w, h, 1);
   let edge = 0;
   let on = 0;
-  for (let i = 0; i < sil.length; i++) {
-    if (sil[i] === 1 && inner[i] === 0) {
+  for (let i = 0; i < region.length; i++) {
+    if (region[i] === 1 && inner[i] === 0) {
       edge++;
-      if (nearThick[i] === 1) on++;
+      if (near[i] === 1) on++;
     }
   }
   return edge === 0 ? 0 : on / edge;
+}
+
+/** a にあって b に無い画素（候補同士の差分を測るため） */
+function diffMask(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length);
+  for (let i = 0; i < out.length; i++) out[i] = a[i] === 1 && b[i] === 0 ? 1 : 0;
+  return out;
 }
 
 interface Extraction {
@@ -415,10 +469,11 @@ function extractWithRadii(
     const silhouette = new Uint8Array(w * h);
     for (const p of comp.pixels) silhouette[p] = 1;
 
-    for (const part of severThinBridges(silhouette, w, h, scaleR(SEVER_R, w))) {
+    const parts = severThinBridges(silhouette, w, h, scaleR(SEVER_R, w), scaleR(SEVER_REACH, w));
+    for (const part of parts) {
       const m = measure(part, w, h);
       if (!m) continue;
-      m.confidence = outlineCoverage(m.mask, nearThick, w, h);
+      m.confidence = edgeCoverage(m.mask, nearThick, w, h);
       out.push(m);
     }
   }
@@ -467,20 +522,31 @@ function dropsOnlyBackground(
   w: number,
   h: number
 ): boolean {
-  const dropped = new Uint8Array(w * h);
-  for (let i = 0; i < dropped.length; i++) {
-    dropped[i] = larger[i] === 1 && smaller[i] === 0 ? 1 : 0;
-  }
-  const inner = erode(dropped, w, h, 1);
-  let edge = 0;
-  let on = 0;
-  for (let i = 0; i < dropped.length; i++) {
-    if (dropped[i] === 1 && inner[i] === 0) {
-      edge++;
-      if (nearStrong[i] === 1) on++;
-    }
-  }
-  return edge === 0 ? true : on / edge < BODY_PART_COVERAGE;
+  return edgeCoverage(diffMask(larger, smaller), nearStrong, w, h) < BODY_PART_COVERAGE;
+}
+
+/**
+ * 小さい候補から大きい候補へ乗り換えてよいか。
+ *
+ * ふつう大きいほうは背景を巻き込んだ結果だが、輪郭の切れ目から塗りが漏れて欠けていた
+ * 部分が、すき間埋めの半径を上げたことで戻ってくる絵もある（マンモスの胴、プテラノドンの
+ * 手前の翼）。戻ってきた体はぐるりと主役の輪郭で囲まれているのに対し、背景を巻き込んだ
+ * ときは線の無いところを橋渡ししたぶん縁が線から外れ、シルエット全体の一致率も下がる。
+ *
+ * 手放す側 (dropsOnlyBackground) より厳しくしてあるのは、岩・氷・草が生き物と同じ太さで
+ * 描かれた絵では「増えたぶんも線で囲まれている」が普通に成り立ってしまい、それだけでは
+ * 背景と区別できないため。それでも下絵によっては背景を拾う（README の設計メモを参照）。
+ */
+function addsOnlyBody(
+  larger: Uint8Array,
+  smaller: Uint8Array,
+  nearStrong: Uint8Array,
+  w: number,
+  h: number,
+  scoreDelta: number
+): boolean {
+  if (scoreDelta < -GROW_SCORE_DROP) return false;
+  return edgeCoverage(diffMask(larger, smaller), nearStrong, w, h) >= GROW_BODY_COVERAGE;
 }
 
 /**
@@ -562,7 +628,8 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
       // 縁が線の上で止まっているだけでは、その線が主役の輪郭なのか地面や草なのかは
       // 区別できない（収縮半径が小さいと背景の線も太線として残るため、一致率は簡単に
       // 1.0 になる）。背景を巻き込めば面積は増えるだけなので、同じくらいきれいに
-      // 切れているなら小さいほうが「生き物だけ」を捉えている。
+      // 切れているなら小さいほうが「生き物だけ」を捉えている。ただし増減した領域が体か
+      // 背景かで例外を見る（dropsOnlyBackground / addsOnlyBody）。
       const area = totalArea(found.subjects);
       if (bestScore < GOOD_COVERAGE) {
         bestScore = score;
@@ -571,11 +638,15 @@ export function extractSubjectMasks(alpha: Uint8Array, w: number, h: number): Su
         bestUnion = null;
         continue;
       }
-      if (area >= bestArea) continue;
       const union = unionMask(found.subjects, w, h);
       bestUnion ??= unionMask(best, w, h);
-      // ただし小さくなった理由が「生き物の一部を切り落とした」ならそれは改善ではない
-      if (!dropsOnlyBackground(bestUnion, union, nearStrong, w, h)) continue;
+      const better =
+        area < bestArea
+          ? // 小さくなった理由が「生き物の一部を切り落とした」ならそれは改善ではない
+            dropsOnlyBackground(bestUnion, union, nearStrong, w, h)
+          : // 大きくなってよいのは、欠けていた体が戻ってきたときだけ
+            addsOnlyBody(union, bestUnion, nearStrong, w, h, score - bestScore);
+      if (!better) continue;
       bestScore = score;
       bestArea = area;
       best = found.subjects;

@@ -26,9 +26,9 @@ export const LEVEL_MARK: Record<Level, string> = { 1: "★", 2: "★★", 3: "�
 
 /** 大人向けの説明ラベル。 */
 export const LEVEL_NAME: Record<Level, string> = {
-  1: "かんたん",
-  2: "ふつう",
-  3: "むずかしい",
+  1: "簡単",
+  2: "普通",
+  3: "難しい",
 };
 
 /** 判定に使う縮小サイズ。1024x768 の 1/4（4:3 を保つ）。 */
@@ -67,6 +67,27 @@ export function lineAlpha(r: number, g: number, b: number, a: number): number {
   const lum = 0.299 * r + 0.587 * g + 0.114 * b; // 知覚輝度
   if (lum >= LUM_HI) return 0;
   if (lum > LUM_LO) return Math.round(a * ((LUM_HI - lum) / (LUM_HI - LUM_LO)));
+  return a;
+}
+
+/**
+ * 白背景の線画 1 画素を下絵の画素に変換して RGBA バッファへ書き戻し、
+ * 線の濃さ（アルファ）を返す。i は画素の先頭バイト位置。
+ *
+ * 線の"色"はどこにも使っていない（塗りは下のレイヤーから透け、はみだしガード
+ * (paint.ts) ・主役の切り抜き (cutout.ts) ・レベル判定はすべてアルファだけを見る）ので
+ * RGB は黒に潰す。3 チャンネルが一様になるぶん PNG が縮み、同梱の下絵で実測 2〜6 割。
+ * アップロード画像は data URL のまま IndexedDB に入るので、そのまま端末の使用量が減る。
+ *
+ * px の型を添字アクセスだけにしてあるのは、ブラウザの Uint8ClampedArray（ImageData）と
+ * CLI 側の Buffer（scripts/lib/lineart-raw.mjs）を同じ関数で扱うため。
+ */
+export function writeLinePixel(px: { [i: number]: number }, i: number): number {
+  const a = lineAlpha(px[i], px[i + 1], px[i + 2], px[i + 3]);
+  px[i] = 0;
+  px[i + 1] = 0;
+  px[i + 2] = 0;
+  px[i + 3] = a;
   return a;
 }
 

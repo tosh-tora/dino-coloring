@@ -29,10 +29,10 @@
       "level": 2
     },
     {
-      "id": "shared-ankylosaurus-vs-trex",
+      "id": "shared-ankylosaurus-vs-trex-realistic",
       "name": "アンキロサウルス vs ティラノサウルス",
       "category": "cat-dino",
-      "file": "shared-ankylosaurus-vs-trex.png",
+      "file": "shared-ankylosaurus-vs-trex-realistic.png",
       "level": 3
     },
     {
@@ -43,32 +43,11 @@
       "level": 2
     },
     {
-      "id": "shared-pachycephalosaurus-realistic",
-      "name": "パキケファロサウルス",
-      "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-realistic.png",
-      "level": 3
-    },
-    {
-      "id": "shared-hercules-beetle",
-      "name": "ヘラクレスオオカブト",
-      "category": "cat-animal",
-      "file": "shared-hercules-beetle.png",
-      "level": 3
-    },
-    {
       "id": "shared-snake",
       "name": "へび",
       "category": "cat-animal",
       "file": "shared-snake.png",
       "level": 3
-    },
-    {
-      "id": "shared-stegosaurus",
-      "name": "ステゴサウルス",
-      "category": "cat-dino",
-      "file": "shared-stegosaurus.png",
-      "level": 2
     },
     {
       "id": "shared-pteranodon",
@@ -99,13 +78,6 @@
       "level": 3
     },
     {
-      "id": "shared-parasaurolophus",
-      "name": "パラサウロロフス",
-      "category": "cat-dino",
-      "file": "shared-parasaurolophus.png",
-      "level": 3
-    },
-    {
       "id": "shared-quetzalcoatlus-titled",
       "name": "ケツァルコアトルス",
       "category": "cat-dino",
@@ -117,41 +89,6 @@
       "name": "アンモナイト",
       "category": "cat-sea",
       "file": "shared-ammonite.png",
-      "level": 3
-    },
-    {
-      "id": "shared-stegosaurus-realistic",
-      "name": "ステゴサウルス",
-      "category": "cat-dino",
-      "file": "shared-stegosaurus-realistic.png",
-      "level": 3
-    },
-    {
-      "id": "shared-trex-volcano",
-      "name": "ティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-trex-volcano.png",
-      "level": 3
-    },
-    {
-      "id": "shared-ankylosaurus-vs-trex-realistic",
-      "name": "アンキロサウルス vs ティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-ankylosaurus-vs-trex-realistic.png",
-      "level": 3
-    },
-    {
-      "id": "shared-triceratops-volcano",
-      "name": "トリケラトプス",
-      "category": "cat-dino",
-      "file": "shared-triceratops-volcano.png",
-      "level": 3
-    },
-    {
-      "id": "shared-pachycephalosaurus-parent",
-      "name": "パキケファロサウルス おやこ",
-      "category": "cat-dino",
-      "file": "shared-pachycephalosaurus-parent.png",
       "level": 3
     },
     {
@@ -167,13 +104,6 @@
       "category": "cat-dino",
       "file": "shared-ornithomimus.png",
       "level": 1
-    },
-    {
-      "id": "shared-ornithomimus-scene",
-      "name": "オルニトミムス",
-      "category": "cat-dino",
-      "file": "shared-ornithomimus-scene.png",
-      "level": 2
     },
     {
       "id": "shared-mosasaurus",
@@ -233,8 +163,8 @@
     },
     {
       "id": "shared-megalodon",
-      "name": "メガロドン",
-      "category": "cat-extinct",
+      "name": "ホオジロザメ",
+      "category": "cat-sea",
       "file": "shared-megalodon.png",
       "level": 2
     },
@@ -281,13 +211,6 @@
       "level": 2
     },
     {
-      "id": "shared-giganotosaurus-trex",
-      "name": "ギガノトサウルスとティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-giganotosaurus-trex.png",
-      "level": 3
-    },
-    {
       "id": "shared-parasaurolophus-scene",
       "name": "パラサウロロフス",
       "category": "cat-dino",
@@ -296,7 +219,7 @@
     },
     {
       "id": "shared-giganotosaurus-triceratops",
-      "name": "ギガノトサウルスとトリケラトプス",
+      "name": "ギガノト vs ティラノ vs トリケラ",
       "category": "cat-dino",
       "file": "shared-giganotosaurus-triceratops.png",
       "level": 2
@@ -356,6 +279,27 @@
       "category": "cat-dino",
       "file": "shared-edmontonia.png",
       "level": 2
+    },
+    {
+      "id": "shared-diplodocus",
+      "name": "ディプロドクス",
+      "category": "cat-dino",
+      "file": "shared-diplodocus.png",
+      "level": 2
+    },
+    {
+      "id": "shared-futabasaurus",
+      "name": "フタバスズキリュウ",
+      "category": "cat-sea",
+      "file": "shared-futabasaurus.png",
+      "level": 1
+    },
+    {
+      "id": "shared-archaeopteryx",
+      "name": "アーケオプテリクス",
+      "category": "cat-dino",
+      "file": "shared-archaeopteryx.png",
+      "level": 3
     },
     {
       "id": "shared-trex-forest",
