@@ -356,6 +356,20 @@
       "category": "cat-dino",
       "file": "shared-edmontonia.png",
       "level": 2
+    },
+    {
+      "id": "shared-trex-forest",
+      "name": "ティラノサウルス",
+      "category": "cat-dino",
+      "file": "shared-trex-forest.png",
+      "level": 3
+    },
+    {
+      "id": "shared-allosaurus-vs-stegosaurus",
+      "name": "アロサウルス vs ステゴサウルス",
+      "category": "cat-dino",
+      "file": "shared-allosaurus-vs-stegosaurus.png",
+      "level": 3
     }
   ]
 }
