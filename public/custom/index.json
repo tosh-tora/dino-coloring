@@ -253,13 +253,6 @@
       "level": 2
     },
     {
-      "id": "shared-triceratops-vs-trex-1",
-      "name": "トリケラトプスたち vs ティラノサウルス",
-      "category": "cat-dino",
-      "file": "shared-triceratops-vs-trex-1.png",
-      "level": 3
-    },
-    {
       "id": "shared-triceratops-vs-trex-2",
       "name": "トリケラトプスたち vs ティラノサウルス",
       "category": "cat-dino",
@@ -306,6 +299,20 @@
       "name": "アーケオプテリクス",
       "category": "cat-dino",
       "file": "shared-archaeopteryx.png",
+      "level": 3
+    },
+    {
+      "id": "shared-trex-forest",
+      "name": "ティラノサウルス",
+      "category": "cat-dino",
+      "file": "shared-trex-forest.png",
+      "level": 3
+    },
+    {
+      "id": "shared-allosaurus-vs-stegosaurus",
+      "name": "アロサウルス vs ステゴサウルス",
+      "category": "cat-dino",
+      "file": "shared-allosaurus-vs-stegosaurus.png",
       "level": 3
     }
   ]
