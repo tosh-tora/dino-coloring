@@ -145,7 +145,7 @@ async function showLibrary() {
   const makerBtn = document.createElement("button");
   makerBtn.className = "nav-btn maker-btn longpress";
   makerBtn.textContent = "🖊️";
-  makerBtn.title = "おとなメニュー（長押し）";
+  makerBtn.title = "保護者メニュー（長押し）";
   bindLongPress(makerBtn, 800, () => {
     blip(720);
     showAdultMenu();
@@ -271,7 +271,7 @@ async function showLibrary() {
     if (local) {
       bindTrashLongPress(
         card,
-        3000,
+        1600,
         () => confirmDelete(1),
         async () => {
           await store.deleteTemplate(art.id).catch(() => {});
@@ -376,7 +376,7 @@ function showAdultMenu() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🔧 おとなメニュー";
+  heading.textContent = "🔧 保護者メニュー";
 
   const mkBtn = (label: string, onClick: () => void) => {
     const b = document.createElement("button");
@@ -392,11 +392,11 @@ function showAdultMenu() {
 
   box.append(
     heading,
-    mkBtn("🖊️ 下絵をつくる", () => showTemplateMaker()),
-    mkBtn("🗂️ ぬりえのかんり（削除・分類・レベル）", () => showManage()),
-    mkBtn("🏷️ カテゴリーのへんしゅう", () => showCategoryEditor()),
-    mkBtn("⚙️ ぬりえのせってい", () => showColoringSettings()),
-    mkBtn("💾 さくひんを 保存する（写真・ファイルへ）", () => showSaveWorks())
+    mkBtn("🖊️ 下絵を作る", () => showTemplateMaker()),
+    mkBtn("🗂️ 塗り絵の管理（削除・分類・レベル）", () => showManage()),
+    mkBtn("🏷️ カテゴリーの編集", () => showCategoryEditor()),
+    mkBtn("⚙️ 塗り絵の設定", () => showColoringSettings()),
+    mkBtn("💾 作品を保存する（写真・ファイルへ）", () => showSaveWorks())
   );
   app.appendChild(overlay);
 }
@@ -459,7 +459,7 @@ function showColoringSettings() {
   const { overlay, box } = makeOverlay("adult-menu", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "⚙️ ぬりえのせってい";
+  heading.textContent = "⚙️ 塗り絵の設定";
 
   const sub = document.createElement("h2");
   sub.className = "guard-sub";
@@ -495,12 +495,12 @@ function showColoringSettings() {
   // ---- バケツ（ぬりつぶし）----
   const fillSub = document.createElement("h2");
   fillSub.className = "guard-sub";
-  fillSub.textContent = "バケツ（ぬりつぶし）";
+  fillSub.textContent = "バケツ（塗りつぶし）";
   const fillDesc = document.createElement("p");
   fillDesc.className = "tm-desc";
   // 文中のアイコンは絵文字ではなくツールバーと同じ絵にする（端末差が出ないように）
   fillDesc.append(
-    "タップした囲まれた場所を 一発でぬりつぶします。かんたんに仕上がるぶん、手で塗る練習にはなりません。オンにすると ぬりえ画面の くれよん／えのぐ の切り替えに ",
+    "タップした囲まれた場所を一発で塗りつぶします。簡単に仕上がる分、手で塗る練習にはなりません。オンにすると塗り絵画面のくれよん／えのぐの切り替えに ",
     makeInlineBucket(),
     " が増えます。"
   );
@@ -513,7 +513,7 @@ function showColoringSettings() {
   fillCheck.type = "checkbox";
   fillCheck.checked = loadFillEnabled();
   const fillText = document.createElement("span");
-  fillText.append(makeInlineBucket(), " バケツを つかえるようにする");
+  fillText.append(makeInlineBucket(), " バケツを使えるようにする");
   fillCheck.addEventListener("change", () => {
     saveFillEnabled(fillCheck.checked);
     blip(fillCheck.checked ? 620 : 380);
@@ -528,7 +528,7 @@ function showColoringSettings() {
   const lvDesc = document.createElement("p");
   lvDesc.className = "tm-desc";
   lvDesc.textContent =
-    "チェックしたレベルのぬりえだけを ライブラリーに出します。レベルは絵の複雑さから自動で決まり、「ぬりえのかんり」で変えられます。";
+    "チェックしたレベルの塗り絵だけをライブラリーに出します。レベルは絵の複雑さから自動で決まり、「塗り絵の管理」で変えられます。";
 
   const allowed = loadAllowedLevels();
   const lvRow = document.createElement("div");
@@ -560,7 +560,7 @@ function showColoringSettings() {
   const foot = document.createElement("p");
   foot.className = "tm-desc";
   foot.textContent =
-    "せっていは この端末に保存され、次にひらいたときも 有効です。ぬりえ画面をひらき直すと反映されます。";
+    "設定はこの端末に保存され、次に開いたときも有効です。塗り絵画面を開き直すと反映されます。";
 
   box.append(heading, sub, desc, row, fillSub, fillDesc, fillRow, lvSub, lvDesc, lvRow, foot);
   // 閉じたらライブラリーを更新（見せるレベルの変更を反映する）
@@ -576,11 +576,11 @@ async function showManage() {
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🗂️ ぬりえのかんり";
+  heading.textContent = "🗂️ 塗り絵の管理";
   const desc = document.createElement("p");
   desc.className = "tm-desc";
   desc.textContent =
-    "なまえ・分類・レベルを変えたり、いらないぬりえを消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
+    "名前・分類・レベルを変えたり、いらない塗り絵を消せます。組み込み・共有の下絵は「非表示」にでき、あとで戻せます。";
 
   const list = document.createElement("div");
   list.className = "manage-list";
@@ -608,8 +608,8 @@ async function showManage() {
     nm.type = "text";
     nm.className = "manage-name";
     nm.value = a.art.name;
-    nm.title = "なまえを へんしゅう";
-    nm.setAttribute("aria-label", "なまえ");
+    nm.title = "名前を編集";
+    nm.setAttribute("aria-label", "名前");
     // 空欄／既定名と同じなら上書きを解除して既定名に戻す。
     nm.addEventListener("change", async () => {
       const v = nm.value.trim();
@@ -632,7 +632,7 @@ async function showManage() {
     sel.className = "manage-select";
     const none = document.createElement("option");
     none.value = "";
-    none.textContent = "みぶんるい";
+    none.textContent = "未分類";
     sel.appendChild(none);
     for (const c of categories) {
       const opt = document.createElement("option");
@@ -689,7 +689,7 @@ async function showManage() {
       toggle.className = "manage-icon";
       const render = () => {
         toggle.textContent = a.hidden ? "🙈" : "👁️";
-        toggle.title = a.hidden ? "ひょうじする" : "ひひょうじにする";
+        toggle.title = a.hidden ? "表示する" : "非表示にする";
         row.classList.toggle("row-hidden", a.hidden);
       };
       render();
@@ -708,7 +708,7 @@ async function showManage() {
 
   const foot = document.createElement("p");
   foot.className = "tm-desc";
-  foot.textContent = "とじると ライブラリーに はんえいされます。";
+  foot.textContent = "閉じるとライブラリーに反映されます。";
 
   const body = document.createElement("div");
   body.className = "modal-body";
@@ -729,14 +729,14 @@ async function showSaveWorks() {
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "💾 さくひんの ほぞん";
+  heading.textContent = "💾 作品の保存";
   const desc = document.createElement("p");
   desc.className = "tm-desc";
-  desc.textContent = "ほぞんしたい さくひんをえらぶと、写真アプリやファイルに書き出せます。";
+  desc.textContent = "保存したい作品を選ぶと、写真アプリやファイルに書き出せます。";
 
   const warn = document.createElement("p");
   warn.className = "tm-desc warn";
-  warn.textContent = "この環境では 書き出しの動きが かんぜんではありません（https でひらいた本番のアプリで お試しください）";
+  warn.textContent = "この環境では書き出しの動きが完全ではありません（https で開いた本番のアプリでお試しください）";
   warn.hidden = shareFilesSupported();
 
   const selected = new Set<number>();
@@ -772,17 +772,17 @@ async function showSaveWorks() {
 
   function refreshControls() {
     const n = selected.size;
-    selectAllText.textContent = `ぜんぶ えらぶ（${withId.length}こ）`;
+    selectAllText.textContent = `全部選ぶ（${withId.length}件）`;
     selectAllCheck.checked = withId.length > 0 && n === withId.length;
     selectAllCheck.indeterminate = n > 0 && n < withId.length;
     if (n === 0) {
-      saveBtn.textContent = "💾 ほぞん";
+      saveBtn.textContent = "💾 保存";
       saveBtn.classList.add("disabled");
     } else if (n <= SHARE_BATCH_MAX) {
-      saveBtn.textContent = `💾 ${n}こ ほぞん`;
+      saveBtn.textContent = `💾 ${n}件 保存`;
       saveBtn.classList.remove("disabled");
     } else {
-      saveBtn.textContent = `💾 ${SHARE_BATCH_MAX}こ ほぞん（のこり ${n - SHARE_BATCH_MAX}こ）`;
+      saveBtn.textContent = `💾 ${SHARE_BATCH_MAX}件 保存（残り ${n - SHARE_BATCH_MAX}件）`;
       saveBtn.classList.remove("disabled");
     }
   }
@@ -822,7 +822,7 @@ async function showSaveWorks() {
   if (withId.length === 0) {
     const empty = document.createElement("div");
     empty.className = "gallery-empty";
-    empty.textContent = "まだ さくひんが ないよ 🎨";
+    empty.textContent = "まだ作品がありません 🎨";
     grid.appendChild(empty);
     selectAllRow.hidden = true;
     foot.hidden = true;
@@ -863,12 +863,12 @@ async function showSaveWorks() {
           const cell = cells.get(id);
           if (cell) setCellSelected(cell, false);
         }
-        const skippedNote = res.skipped > 0 ? `（${res.skipped}こは よみこめませんでした）` : "";
+        const skippedNote = res.skipped > 0 ? `（${res.skipped}件は読み込めませんでした）` : "";
         switch (res.outcome.kind) {
           case "shared":
           case "downloaded":
             toast.className = "tm-toast";
-            toast.textContent = `${res.outcome.count}こ ほぞんしました ✅${skippedNote}`;
+            toast.textContent = `${res.outcome.count}件保存しました ✅${skippedNote}`;
             toast.hidden = false;
             blip(700);
             break;
@@ -877,13 +877,13 @@ async function showSaveWorks() {
             break;
           case "unsupported":
             toast.className = "tm-toast warn";
-            toast.textContent = "この環境では ほぞんできません（https でひらいてください）";
+            toast.textContent = "この環境では保存できません（https で開いてください）";
             toast.hidden = false;
             blip(300);
             break;
           case "failed":
             toast.className = "tm-toast warn";
-            toast.textContent = `ほぞんできませんでした 😢${skippedNote}`;
+            toast.textContent = `保存できませんでした 😢${skippedNote}`;
             toast.hidden = false;
             blip(300);
             break;
@@ -907,7 +907,7 @@ async function showCategoryEditor() {
   const { overlay, box } = makeOverlay("cat-editor", { closeOnOutsideClick: false });
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🏷️ カテゴリー";
+  heading.textContent = "🏷️ カテゴリーの編集";
 
   const list = document.createElement("div");
   list.className = "cat-list";
@@ -945,10 +945,10 @@ async function showCategoryEditor() {
   const addInput = document.createElement("input");
   addInput.type = "text";
   addInput.className = "tm-input";
-  addInput.placeholder = "あたらしい分類（例: うみのいきもの）";
+  addInput.placeholder = "新しい分類（例: 海の生き物）";
   const addBtn = document.createElement("button");
   addBtn.className = "tm-btn";
-  addBtn.textContent = "＋ ついか";
+  addBtn.textContent = "＋ 追加";
   addBtn.addEventListener("click", async () => {
     const v = addInput.value.trim();
     if (!v) return;
@@ -1079,7 +1079,7 @@ async function showTemplateMaker() {
 
   const heading = document.createElement("h1");
   heading.className = "tm-heading";
-  heading.textContent = "🖊️ 下絵メーカー（おとな向け）";
+  heading.textContent = "🖊️ 下絵メーカー（保護者向け）";
 
   // ---- セクション1: プロンプトを作る ----
   const sec1 = document.createElement("section");
@@ -1217,13 +1217,13 @@ async function showTemplateMaker() {
   const desc2 = document.createElement("p");
   desc2.className = "tm-desc";
   desc2.textContent =
-    "AIで作った白背景の下絵画像を選ぶと、ぬりえに追加されます。名前は①の「描きたいもの」が初期値です（変更可）。";
+    "AIで作った白背景の下絵画像を選ぶと、塗り絵に追加されます。名前は①の「描きたいもの」が初期値です（変更可）。";
 
   // 名前欄。初期値は①の「描きたいもの」。ユーザーが手で編集するまでは追従する。
   const nameInput = document.createElement("input");
   nameInput.type = "text";
   nameInput.className = "tm-input";
-  nameInput.placeholder = "マイぬりえ";
+  nameInput.placeholder = "マイ塗り絵";
   nameInput.value = input.value;
   let nameEdited = false;
   nameInput.addEventListener("input", () => {
@@ -1233,12 +1233,12 @@ async function showTemplateMaker() {
     if (!nameEdited) nameInput.value = input.value;
   });
 
-  // カテゴリー選択（任意）。既定は「みぶんるい」。
+  // カテゴリー選択（任意）。既定は「未分類」。
   const catSelect = document.createElement("select");
   catSelect.className = "tm-input tm-select";
   const noneOpt = document.createElement("option");
   noneOpt.value = "";
-  noneOpt.textContent = "みぶんるい";
+  noneOpt.textContent = "未分類";
   catSelect.appendChild(noneOpt);
   for (const c of categories) {
     const opt = document.createElement("option");
@@ -1272,7 +1272,7 @@ async function showTemplateMaker() {
       const { imageUrl, level } = await processUploadedImage(file);
       const createdAt = Date.now();
       const id = "custom-" + createdAt;
-      const name = nameInput.value.trim() || "マイぬりえ";
+      const name = nameInput.value.trim() || "マイ塗り絵";
       await store.addTemplate({ id, name, imageUrl, createdAt, level });
       if (catSelect.value) await store.setArtCategory(id, catSelect.value).catch(() => {});
       blip(760);
@@ -1307,11 +1307,21 @@ type ColoringStart =
   /** 完成作品を塗り直す。「できた！」でこの作品を上書きする */
   | { kind: "reedit"; item: store.GalleryItem };
 
-/** むしめがねの倍率 */
-const ZOOM = 2;
+/** ピンチで広げられる最大倍率。canvas は 1024x768 のままなので、これ以上広げると
+ *  線がドットに見えてくる（4 倍でがたつきが目立つ） */
+const ZOOM_MAX = 3;
+/** 指を離したときにこれ以下なら等倍に戻す。少しだけ広がったまま残らないように */
+const ZOOM_SNAP = 1.05;
+/** ホイール 1 イベントぶんの拡大の効き具合。小さくすると 1 回で大きく変わる */
+const WHEEL_ZOOM_DIVISOR = 100;
+/** 1 イベントで見る deltaY の上限。トラックパッドのピンチは 1〜10 程度が連続で来るのに対し
+ *  マウスは 1 目盛りで 100 前後まとめて来るので、そのまま入れるとマウスだけ暴れる */
+const WHEEL_DELTA_MAX = 24;
 
 /**
- * むしめがね: 紙の一部を大きくして、細かいところを塗れるようにする。
+ * ピンチで紙の一部を大きくして、細かいところを塗れるようにする。
+ * 2 本指を広げる＝拡大、縮める＝縮小、2 本指のまま動かす＝表示位置の移動。
+ * PC のトラックパッド（ピンチ / 2 本指スクロール）と Ctrl + ホイールでも同じことができる。
  *
  * 拡大は .stage-inner への CSS transform だけで行う。PaintEngine の座標変換は
  * canvas の getBoundingClientRect() 基準（＝祖先の transform が反映された矩形）なので、
@@ -1319,65 +1329,143 @@ const ZOOM = 2;
  * はみだしガード・バケツ・もどす・「できた！」の合成もそのまま効く。
  * canvas を実際に拡大する実装に書き換えないこと。
  */
-function setupZoom(btn: HTMLButtonElement, stage: HTMLElement, inner: HTMLElement) {
-  let zoomed = false;
-  let pick: HTMLElement | null = null;
+function setupPinchZoom(
+  stageWrap: HTMLElement,
+  stage: HTMLElement,
+  inner: HTMLElement,
+  engine: PaintEngine
+) {
+  /** いま紙に触れている指。入れ替えても順番が変わらないので、最初の 2 本をピンチに使う */
+  const touches = new Map<number, { x: number; y: number }>();
+  let scale = 1;
+  let tx = 0;
+  let ty = 0;
+  /** ピンチ開始時の指の間隔・中点・そのときの表示。ここからの差分で今の表示を決める */
+  let from: { dist: number; cx: number; cy: number; scale: number; tx: number; ty: number } | null =
+    null;
 
-  const render = () => {
-    btn.textContent = zoomed ? "🔎" : "🔍";
-    btn.classList.toggle("selected", zoomed || pick !== null);
-    btn.title = zoomed ? "もとの おおきさに もどす" : "おおきくする";
+  /** 最初の 2 本の指の間隔と中点（紙の左上からの px） */
+  const gesture = () => {
+    const [a, b] = [...touches.values()];
+    const rect = stage.getBoundingClientRect();
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      cx: (a.x + b.x) / 2 - rect.left,
+      cy: (a.y + b.y) / 2 - rect.top,
+    };
   };
-  render();
 
-  const closePick = () => {
-    pick?.remove();
-    pick = null;
+  const apply = () => {
+    // 紙 (.stage) の外に白い余白が見えないよう、はみ出せる範囲に収める
+    const maxX = (scale - 1) * stage.clientWidth;
+    const maxY = (scale - 1) * stage.clientHeight;
+    tx = Math.min(0, Math.max(-maxX, tx));
+    ty = Math.min(0, Math.max(-maxY, ty));
+    inner.style.transform = scale === 1 ? "" : `translate(${tx}px, ${ty}px) scale(${scale})`;
   };
 
-  btn.addEventListener("click", () => {
-    // 場所を選んでいる最中にもう一度押されたら、選ぶのをやめる
-    if (pick) {
-      blip(420);
-      closePick();
-      render();
+  /** (clientX, clientY) にある紙の点を動かさずに倍率を factor 倍する。
+   *  指の中点を基準にするピンチと同じことを、ポインタ 1 点でやる。
+   *  カーソルが紙の外（上下の余白）にあるときは、いちばん近い紙の縁を基準にする */
+  const zoomAt = (factor: number, clientX: number, clientY: number) => {
+    const next = Math.min(ZOOM_MAX, Math.max(1, scale * factor));
+    if (next === scale) return;
+    const rect = stage.getBoundingClientRect();
+    const px = Math.min(rect.width, Math.max(0, clientX - rect.left));
+    const py = Math.min(rect.height, Math.max(0, clientY - rect.top));
+    tx = px - ((px - tx) / scale) * next;
+    ty = py - ((py - ty) / scale) * next;
+    scale = next <= ZOOM_SNAP ? 1 : next;
+    if (scale === 1) {
+      tx = 0;
+      ty = 0;
+    }
+    apply();
+  };
+
+  const onDown = (e: PointerEvent) => {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // 2 本目が触れた時点でピンチとみなす。1 本目がすでに引いてしまった線は無かったことにする
+    if (touches.size === 2) engine.cancelStroke();
+  };
+
+  const onMove = (e: PointerEvent) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size < 2) return;
+    const now = gesture();
+    // 指が 1 本になってからまた 2 本になった場合もここで組み直す
+    if (!from) {
+      from = { ...now, scale, tx, ty };
       return;
     }
-    if (zoomed) {
-      blip(500);
-      zoomed = false;
-      inner.style.transform = "";
-      inner.style.transformOrigin = "";
-      render();
-      return;
-    }
+    if (from.dist <= 0) return;
+    scale = Math.min(ZOOM_MAX, Math.max(1, (from.scale * now.dist) / from.dist));
+    // 指の中点にある紙の点を、動いた先の中点へ連れていく（＝つまんだ所が指について動く）
+    tx = now.cx - ((from.cx - from.tx) / from.scale) * scale;
+    ty = now.cy - ((from.cy - from.ty) / from.scale) * scale;
+    apply();
+  };
 
-    // 拡大したい場所を 1 回タップしてもらう。その間だけ紙の前面に透明な板を置くので、
-    // 選ぶためのタップが塗りレイヤーに届かない（線が引かれてしまわない）
-    blip(720);
-    const el = document.createElement("div");
-    el.className = "zoom-pick";
-    const label = document.createElement("span");
-    label.className = "zoom-pick-label";
-    label.textContent = "おおきくしたい ところを タップしてね";
-    el.appendChild(label);
-    el.addEventListener("pointerdown", (e) => {
-      const rect = el.getBoundingClientRect();
-      const px = ((e.clientX - rect.left) / rect.width) * 100;
-      const py = ((e.clientY - rect.top) / rect.height) * 100;
-      // タップした点を動かさずに広げるので、紙の外の余白が見えることは起こらない
-      // （＝はみ出しを抑えるためのクランプ計算が要らない）
-      inner.style.transformOrigin = `${px}% ${py}%`;
-      inner.style.transform = `scale(${ZOOM})`;
-      zoomed = true;
-      closePick();
-      render();
-      blip(880);
-    });
-    pick = el;
-    stage.appendChild(el);
-    render();
-  });
+  const onUp = (e: PointerEvent) => {
+    if (!touches.delete(e.pointerId)) return;
+    if (touches.size < 2) from = null;
+    if (touches.size > 0) return;
+    // ほぼ等倍まで縮めたら、ぴったり等倍に戻す
+    if (scale <= ZOOM_SNAP) {
+      scale = 1;
+      tx = 0;
+      ty = 0;
+      apply();
+    }
+    engine.resumeStrokes();
+  };
+
+  // canvas は 1 本目の指を setPointerCapture するが、捕捉した要素は stage の子なので
+  // 2 本目以降も含めて全部の指のイベントがここを通る。
+  // capture フェーズで受けるのは、2 本目が触れた瞬間の cancelStroke() を canvas 側の
+  // pointerdown より先に走らせるため（バケツが 2 本目の指でもう一度塗ってしまうのを防ぐ）
+  const opts = { capture: true };
+  stage.addEventListener("pointerdown", onDown, opts);
+  stage.addEventListener("pointermove", onMove, opts);
+  stage.addEventListener("pointerup", onUp, opts);
+  stage.addEventListener("pointercancel", onUp, opts);
+
+  // ---- PC（トラックパッド / マウス）----
+  // マウスで描いている最中に拡大すると、canvas の矩形が動いて線が飛ぶ。
+  // ピンチと同じように描きかけを取り消すが、指と違って「全部離れた」が分からないので
+  // すぐ再開させる（ボタンを押し直すまで次のストロークは始まらない）
+  const cancelPenStroke = () => {
+    engine.cancelStroke();
+    engine.resumeStrokes();
+  };
+
+  // ホイールは紙 (.stage) ではなく `.stage-wrap` で受ける。カーソルが紙から少し外れた
+  // だけで無反応になるのを防ぐため（紙は 4:3 なので上下に余白が出る）。パネルは含まないので、
+  // いろ・道具パネルの overflow-y スクロールはホイールに奪われない
+  stageWrap.addEventListener(
+    "wheel",
+    (e: WheelEvent) => {
+      // 行単位で来る環境（Firefox など）は 1 行 ≒ 16px として揃える
+      const k = e.deltaMode === 1 ? 16 : 1;
+      // macOS は 2 本指の動きをピンチとスクロールに振り分けるが、広げる角度によっては
+      // ピンチのつもりでもスクロール (ctrlKey 無し) として届く。等倍のときは動かす余地が
+      // 無く移動に使い道がないので、そのまま拡大に回して「無反応」をなくす
+      if (e.ctrlKey || scale === 1) {
+        e.preventDefault(); // 押さえないとページ全体が拡大される
+        const dy = Math.max(-WHEEL_DELTA_MAX, Math.min(WHEEL_DELTA_MAX, e.deltaY * k));
+        cancelPenStroke();
+        zoomAt(Math.exp(-dy / WHEEL_ZOOM_DIVISOR), e.clientX, e.clientY);
+        return;
+      }
+      // 拡大中の 2 本指スクロール（マウスならホイール）は表示位置の移動にする
+      e.preventDefault();
+      tx -= e.deltaX * k;
+      ty -= e.deltaY * k;
+      apply();
+    },
+    { passive: false }
+  );
 }
 
 async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
@@ -1399,12 +1487,10 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   const artTitle = document.createElement("span");
   artTitle.className = "art-title";
   artTitle.textContent = art.name;
-  const zoomBtn = document.createElement("button");
-  zoomBtn.className = "nav-btn zoom-btn";
   const doneBtn = document.createElement("button");
   doneBtn.className = "nav-btn done-btn";
   doneBtn.textContent = "🎉 できた！";
-  header.append(backBtn, artTitle, zoomBtn, makeMuteButton(), doneBtn);
+  header.append(backBtn, artTitle, makeMuteButton(), doneBtn);
   screen.appendChild(header);
 
   // ---- 中央: 2 レイヤー canvas ----
@@ -1415,7 +1501,7 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   stageWrap.className = "stage-wrap";
   const stage = document.createElement("div");
   stage.className = "stage";
-  // 拡大するのはこの内側だけ。紙 (.stage) の大きさと overflow:hidden は据え置きで、
+  // ピンチで拡大するのはこの内側だけ。紙 (.stage) の大きさと overflow:hidden は据え置きで、
   // はみ出したぶんが切り取られる
   const stageInner = document.createElement("div");
   stageInner.className = "stage-inner";
@@ -1430,10 +1516,10 @@ async function showColoring(art: LineArt, start: ColoringStart, level: Level) {
   stageInner.append(paintCanvas, lineartCanvas);
   stage.appendChild(stageInner);
   stageWrap.appendChild(stage);
-  setupZoom(zoomBtn, stage, stageInner);
 
   const engine = new PaintEngine(paintCanvas);
   engine.setGuardThreshold(loadGuardThreshold());
+  setupPinchZoom(stageWrap, stage, stageInner, engine);
 
   // ---- 自動保存 (debounce) ----
   let saveTimer: number | null = null;
@@ -1749,7 +1835,7 @@ async function showGallery() {
     });
     bindTrashLongPress(
       cell,
-      3000,
+      1600,
       () => confirmDelete(1),
       () => {
         if (item.id !== undefined) void removeItems([item.id]);
@@ -1763,8 +1849,10 @@ async function showGallery() {
     const img = await loadImage(item.dataUrl).catch(() => null);
     if (!img) return;
     const entry = entryById.get(item.lineartId);
-    // 下絵が消えている作品は動かしようがないので、そのまま大きく見せる
-    const subjects = entry ? await cutOutSubjects(entry.art, img).catch(() => [] as Subject[]) : [];
+    // 下絵が消えている作品は動かしようがないので、そのまま大きく見せる。
+    // 切り抜きの完了は待たず、絵はすぐに開いて裏で並行して求める
+    // （playSubjects 側が届き次第「うごかす」ボタンを出す）
+    const subjects = entry ? cutOutSubjects(entry.art, img).catch(() => [] as Subject[]) : [];
     // 下絵が無いと線画を描き直せない＝塗り直せないので、そのときはボタンを出さない
     await playSubjects(img, subjects, {
       onMore: entry ? () => void reeditWork(item, entry) : undefined,

@@ -47,14 +47,34 @@ export function confetti(durationMs = 2600): Promise<void> {
       });
     }
 
-    const start = performance.now();
+    let done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      clearTimeout(safety);
+      canvas.remove();
+      resolve();
+    }
+    // メインスレッドが長時間ブロックされたりタブが裏に回ったりすると rAF が来ないので、
+    // 「経過フレーム時間」の積み上げが止まったまま Promise が解決しないことがある。
+    // その場合でも実時間の上限で必ず片付ける
+    const safety = setTimeout(finish, durationMs * 4);
+
+    let last = performance.now();
+    let elapsed = 0;
     function frame(now: number) {
-      const elapsed = now - start;
+      if (done) return;
+      // 直前のフレームが極端に離れていても（ブロック明け・タブ復帰など）紙吹雪の
+      // 見た目の進み方には反映しない。1 フレーム分として丸めておく
+      const dt = Math.min(now - last, 50);
+      last = now;
+      elapsed += dt;
+      const scale = dt / 16.7; // 60fps 基準の移動量にそろえる（120Hz などで速くなりすぎないように）
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const p of parts) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.rot += p.vrot;
+        p.x += p.vx * scale;
+        p.y += p.vy * scale;
+        p.rot += p.vrot * scale;
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rot);
@@ -65,8 +85,7 @@ export function confetti(durationMs = 2600): Promise<void> {
       if (elapsed < durationMs) {
         requestAnimationFrame(frame);
       } else {
-        canvas.remove();
-        resolve();
+        finish();
       }
     }
     requestAnimationFrame(frame);

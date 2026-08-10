@@ -1,20 +1,29 @@
-// 下絵メーカー: アップロード画像の下絵化（白背景の透明化）と、外部画像生成AI用の
-// 英語プロンプト生成、クリップボードコピーのユーティリティ。
+// 下絵メーカー: アップロード画像の下絵化（1024x768 化・白背景の透明化・線を黒に統一）と、
+// 外部画像生成AI用の英語プロンプト生成、クリップボードコピーのユーティリティ。
 import { CANVAS_W, CANVAS_H } from "./lineart";
-import { lineAlpha, levelFromAlpha, type Level } from "./level-core";
+import { writeLinePixel, levelFromAlpha, type Level } from "./level-core";
 
-/** File を Image 要素に読み込む */
+/**
+ * File を Image 要素に読み込む。
+ *
+ * object URL を使うのは使用メモリのため。FileReader.readAsDataURL だと元ファイルの
+ * 約 1.37 倍の base64 文字列が、デコード済みビットマップと同時にメモリへ載る
+ * （iPad で写真アプリから 12MP の画像を選ぶと効いてくる）。object URL なら
+ * 文字列は数十バイトで済む。読み終えたら成否によらず解放する。
+ */
 function fileToImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("画像を読み込めませんでした"));
-      img.src = reader.result as string;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
     };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("画像を読み込めませんでした"));
+    };
+    img.src = url;
   });
 }
 
@@ -22,6 +31,10 @@ function fileToImage(file: File): Promise<HTMLImageElement> {
  * 読み込み済み画像を下絵（透明背景の線画）にして、data URL と線の濃さ（アルファ）を返す。
  * - 1024×768 canvas に contain 配置（縦横比を保って中央に収める）で描画。
  * - 白に近い画素ほど透明にして、暗い線だけを残す。これで塗りレイヤーが下から透ける。
+ * - 残った線は黒に統一する（色は使わないので、圧縮のために捨てる）。
+ *
+ * どんな大きさ・重さの画像を渡しても、ここを通した時点で 1024×768 の線だけの PNG に
+ * なる（＝アップロード画像の「圧縮」はこの関数が担っている。原本は保存しない）。
  * アルファはレベル判定にそのまま使える（画像を読み直さずに済む）。
  */
 function toTransparent(img: HTMLImageElement): { imageUrl: string; alpha: Uint8Array } {
@@ -41,25 +54,16 @@ function toTransparent(img: HTMLImageElement): { imageUrl: string; alpha: Uint8A
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, x, y, w, h);
 
-  // 白背景 → 透明化（規則は level-core.ts の lineAlpha に集約。CLI と同じもの）
+  // 白背景 → 透明化 + 線を黒に統一（規則は level-core.ts の writeLinePixel に集約。
+  // CLI と同じもの）。黒に潰すぶん PNG が縮むので、保存する data URL も小さくなる
   const data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
   const px = data.data;
   const alpha = new Uint8Array(CANVAS_W * CANVAS_H);
   for (let i = 0, p = 0; i < px.length; i += 4, p++) {
-    const a = lineAlpha(px[i], px[i + 1], px[i + 2], px[i + 3]);
-    px[i + 3] = a;
-    alpha[p] = a;
+    alpha[p] = writeLinePixel(px, i);
   }
   ctx.putImageData(data, 0, 0);
   return { imageUrl: canvas.toDataURL("image/png"), alpha };
-}
-
-/**
- * 読み込み済み画像を透明背景の下絵 data URL にする。
- * 共有下絵の読み込みで使う（レベルは index.json に焼き込み済みなので判定しない）。
- */
-export function imageToTransparentDataUrl(img: HTMLImageElement): string {
-  return toTransparent(img).imageUrl;
 }
 
 /**

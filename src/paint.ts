@@ -16,6 +16,16 @@ const LINE_OVERLAP = 20;
 /** ストローク開始点が線の上だったとき、近くの空きピクセルを探す半径 (px) */
 const SEED_SEARCH = 24;
 
+/** バケツで塗ってからこの時間内に cancelStroke() が来たら、その 1 発を取り消す (ms)。
+ *  ピンチの 1 本目の指が置かれた瞬間に塗りつぶしが起きてしまうため */
+const FILL_UNDO_GRACE = 400;
+
+// ---- 速い動きの補間 ----
+/** ストローク中の点の最大間隔 (px)。これより飛んだら間を補間して埋める */
+const POINT_STEP = 4;
+/** 1 回の飛びで補間する点数の上限（画面外から戻ってきたとき等の暴走よけ） */
+const MAX_INTERP = 256;
+
 export class PaintEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -37,6 +47,11 @@ export class PaintEngine {
 
   private activePointer: number | null = null;
   private points: { x: number; y: number }[] = [];
+  /** ピンチ操作中は塗らない。activePointer を消すだけだと、ピンチ中に指を 1 本残したまま
+   *  動かしたときに新しいストロークが始まってしまうので、全部の指が離れるまで止める */
+  private suspended = false;
+  /** バケツで最後に塗りつぶした時刻。ピンチ開始時にその 1 発を取り消すために見る */
+  private lastFillAt = 0;
 
   // はみだしガード: 線画から作る障壁マップと、ストローク中の塗り許可マスク
   /** 1 = 線 (障壁)。setLineart で線画レイヤーから作る */
@@ -123,8 +138,7 @@ export class PaintEngine {
     return this.undoStack.length > 0;
   }
 
-  private toCanvasPos(e: PointerEvent) {
-    const rect = this.canvas.getBoundingClientRect();
+  private toCanvasPos(e: PointerEvent, rect = this.canvas.getBoundingClientRect()) {
     return {
       x: ((e.clientX - rect.left) * this.canvas.width) / rect.width,
       y: ((e.clientY - rect.top) * this.canvas.height) / rect.height,
@@ -132,6 +146,7 @@ export class PaintEngine {
   }
 
   private onDown = (e: PointerEvent) => {
+    if (this.suspended) return; // ピンチ中
     // 2 本目以降の指は無視（簡易パーム対策）
     if (this.activePointer !== null) return;
 
@@ -167,14 +182,37 @@ export class PaintEngine {
 
   private onMove = (e: PointerEvent) => {
     if (e.pointerId !== this.activePointer) return;
+    // rect はイベントごとに 1 回だけ取る（サンプルごとに呼ぶと毎回レイアウトが走る）
+    const rect = this.canvas.getBoundingClientRect();
     const events = "getCoalescedEvents" in e ? e.getCoalescedEvents() : [e];
-    for (const ev of events) {
-      const pos = this.toCanvasPos(ev);
-      this.points.push(pos);
-      this.guardPoint(pos);
-    }
+    for (const ev of events) this.addPoint(this.toCanvasPos(ev, rect));
     this.renderStroke();
   };
+
+  /** 前の点から遠いときは間を補間してから足す。速く動かしたときに
+   *  (1) 線がカーソルに追いつかない (2) ガードが領域の境界を跨ぎ越して
+   *  境界のまわりに穴が空く のを防ぐ */
+  private addPoint(pos: { x: number; y: number }) {
+    const prev = this.points[this.points.length - 1];
+    if (prev) {
+      const dx = pos.x - prev.x;
+      const dy = pos.y - prev.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > POINT_STEP) {
+        const n = Math.min(MAX_INTERP, Math.floor(dist / POINT_STEP));
+        for (let i = 1; i <= n; i++) {
+          const t = i / (n + 1);
+          // guardPoint は領域を跨ぐと this.points を差し替えるが、prev / dx / dy は
+          // ループ前に確定しているので影響を受けない
+          const p = { x: prev.x + dx * t, y: prev.y + dy * t };
+          this.points.push(p);
+          this.guardPoint(p);
+        }
+      }
+    }
+    this.points.push(pos);
+    this.guardPoint(pos);
+  }
 
   private onUp = (e: PointerEvent) => {
     if (e.pointerId !== this.activePointer) return;
@@ -188,6 +226,47 @@ export class PaintEngine {
     this.lastInside = null;
     this.onStrokeEnd?.();
   };
+
+  // ---------------------------------------------------------------- pinch
+
+  /** ピンチが始まったときに呼ぶ。2 本目の指が触れる前に 1 本目が引いてしまった線を
+   *  なかったことにして、指が全部離れるまで塗りを止める（→ resumeStrokes）。 */
+  cancelStroke() {
+    this.suspended = true;
+
+    if (this.activePointer !== null) {
+      try {
+        this.canvas.releasePointerCapture(this.activePointer);
+      } catch {
+        // capture が外れていても状態のリセットは続ける
+      }
+      this.activePointer = null;
+      // ストローク開始時のスナップショットに戻す（undo は積まない = 取り消しではなく無かったこと）
+      if (this.preStroke) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(this.preStroke, 0, 0);
+        this.preStroke = null;
+      }
+      this.points = [];
+      this.mask = null;
+      this.lastInside = null;
+      this.hasAccum = false;
+      this.onStrokeEnd?.(); // 塗り音を止め、ツールバーを更新する
+      return;
+    }
+
+    // バケツは触れた瞬間に塗り終わっているので、ストロークのように巻き戻せない。
+    // 直前の 1 発だけ undo で戻す
+    if (this.fillTool && Date.now() - this.lastFillAt < FILL_UNDO_GRACE) {
+      this.lastFillAt = 0;
+      this.undo();
+    }
+  }
+
+  /** 指がすべて離れたら塗りを再開する */
+  resumeStrokes() {
+    this.suspended = false;
+  }
 
   // ---------------------------------------------------------------- guard
 
@@ -247,6 +326,7 @@ export class PaintEngine {
     this.compositeStroke();
 
     this.pushUndo(snap);
+    this.lastFillAt = Date.now();
     return true;
   }
 
@@ -397,20 +477,21 @@ export class PaintEngine {
     s.fillStyle = s.strokeStyle;
 
     if (pts.length === 0) return;
-    if (pts.length < 3) {
-      s.beginPath();
-      s.arc(pts[0].x, pts[0].y, this.size / 2, 0, Math.PI * 2);
-      s.fill();
-    } else {
-      s.beginPath();
-      s.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length - 1; i++) {
-        const mx = (pts[i].x + pts[i + 1].x) / 2;
-        const my = (pts[i].y + pts[i + 1].y) / 2;
-        s.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
-      }
-      s.stroke();
+    // 押しただけ / 同じ場所に留まったときも点が残るよう、始点には必ず丸を打つ
+    s.beginPath();
+    s.arc(pts[0].x, pts[0].y, this.size / 2, 0, Math.PI * 2);
+    s.fill();
+    if (pts.length < 2) return;
+    s.beginPath();
+    s.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      s.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
     }
+    // 中点で止めず最新の点までつなぐ（ここが無いと線がカーソルに追いつかない）
+    s.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    s.stroke();
   }
 
   /** points をストロークバッファに描き、preStroke + モード合成で本 canvas に反映 */
