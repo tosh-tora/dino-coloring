@@ -11,8 +11,21 @@ const MIX_RATIO = 0.5;
 // ---- はみだしガード ----
 /** この alpha 以上の線画ピクセルを「線」（塗りの障壁）とみなす */
 const LINE_ALPHA = 48;
-/** 線の内側へ塗り込みを許す深さ (px)。線と塗りの間に白い隙間ができるのを防ぐ */
-const LINE_OVERLAP = 20;
+/** 線に囲まれたこの面積以下の「線でない」かたまりは、線の中の穴とみなして線に含める。
+ *  下絵には線の中に完全透明の画素が点々と残っており（元画像のざらつき＋減色）、
+ *  flood は線の中から線でない画素へ戻らないので、そこだけ紙の白が残ってしまう。
+ *  指でタップもできない大きさなので、埋めてしまってよい。
+ *  面積によらず「幅 1〜2px の細い割れ目」も同じ理由で塞ぐ（sealPinholes を参照） */
+const PINHOLE_MAX = 12;
+/**
+ * これ以上濃い線の画素は「下に何を塗っても見えない」とみなす。
+ *
+ * 線の下を塗るのは、線のふちの薄い画素（塗りと線の間で白っぽく浮く所）を消すため。
+ * 濃い画素まで塗り進める必要はなく、逆に進めると線の反対側の薄い所へ色が抜けて
+ * 隣の形（歯など）にはみ出して見える。そこで濃い画素に着いた時点で止める。
+ * 同梱の下絵では、塗り領域に接する線の画素の 87% がこの濃さ（＝ほとんどは1歩で止まる）。
+ */
+const INK_OPAQUE = 200;
 /** ストローク開始点が線の上だったとき、近くの空きピクセルを探す半径 (px) */
 const SEED_SEARCH = 24;
 
@@ -56,6 +69,12 @@ export class PaintEngine {
   // はみだしガード: 線画から作る障壁マップと、ストローク中の塗り許可マスク
   /** 1 = 線 (障壁)。setLineart で線画レイヤーから作る */
   private barrier: Uint8Array | null = null;
+  /**
+   * 画素ごとの持ち主の領域 id。setLineart で barrier から作る。
+   * 線でない画素は自分が属する領域の id、線の画素は「いちばん近い領域」の id を持つ。
+   * 塗りは「自分が持っている画素」だけを塗るので、隣の形へ色が回り込まない。
+   */
+  private owner: Int32Array | null = null;
   /** 線を越えて塗るのに必要なドラッグ距離 (px)。0 = ガードなし */
   private guardThreshold = 0;
   /** ストローク中の塗り許可マスク (1 = 塗ってよい)。いまいる領域だけを表し、
@@ -66,7 +85,6 @@ export class PaintEngine {
   private maskCanvas: HTMLCanvasElement;
   private maskCtx: CanvasRenderingContext2D;
   private maskBuf: Uint8Array | null = null;
-  private floodQueue: Int32Array | null = null;
   /** 最後にマスク内にいた位置。ここからの距離が閾値を超えたら領域を切り替える */
   private lastInside: { x: number; y: number } | null = null;
   /** 領域を切り替えるとき、旧領域ぶんの描画を確定させておくバッファ。
@@ -125,10 +143,169 @@ export class PaintEngine {
     const h = this.canvas.height;
     const data = lineartCanvas.getContext("2d")!.getImageData(0, 0, w, h).data;
     const barrier = new Uint8Array(w * h);
+    const alpha = new Uint8Array(w * h);
     for (let i = 0; i < barrier.length; i++) {
-      if (data[i * 4 + 3] >= LINE_ALPHA) barrier[i] = 1;
+      alpha[i] = data[i * 4 + 3];
+      if (alpha[i] >= LINE_ALPHA) barrier[i] = 1;
     }
+    this.sealPinholes(barrier, w, h);
     this.barrier = barrier;
+    this.owner = this.buildOwner(barrier, alpha, w, h);
+  }
+
+  /**
+   * 画素ごとの「持ち主の領域」を決める。
+   *
+   * まず線でない画素を 4 近傍で領域に分け、次にすべての領域を同時に種にした多点 BFS で
+   * 線の画素へ id を広げる。同時に広げるので、線の上では両側からの距離が等しいところ
+   * （＝線の中央）で持ち主が分かれる。`cutout.ts` の severThinBridges と同じ考え方。
+   *
+   * 広げるのは「線のふちの薄い画素」までで、INK_OPAQUE 以上の濃い画素に着いたらそこで
+   * 止める。濃い画素の下は何を塗っても見えないので進む意味がなく、進めてしまうと線の
+   * 反対側の薄い所へ色が抜けて、隣の形（歯など）にはみ出して見えるため。
+   *
+   * これにより「塗り＝自分が持っている画素」と決めるだけで、
+   *   - 線のふちの薄い所まで塗られる（塗りと線のあいだに白っぽい隙間ができない）
+   *   - 線の芯より先へは進まないので、色が隣の形へ回り込まない
+   * の両方が同時に成り立つ。
+   */
+  private buildOwner(
+    barrier: Uint8Array,
+    alpha: Uint8Array,
+    w: number,
+    h: number
+  ): Int32Array {
+    const owner = new Int32Array(w * h).fill(-1);
+    const queue = new Int32Array(w * h);
+    let head = 0;
+    let tail = 0;
+
+    // 線でない画素を領域ごとにラベリングし、そのまま BFS の種にする
+    let nextId = 0;
+    const stack = new Int32Array(w * h);
+    for (let start = 0; start < owner.length; start++) {
+      if (barrier[start] || owner[start] >= 0) continue;
+      const id = nextId++;
+      let sp = 0;
+      stack[sp++] = start;
+      owner[start] = id;
+      const push = (q: number) => {
+        if (!barrier[q] && owner[q] < 0) {
+          owner[q] = id;
+          stack[sp++] = q;
+        }
+      };
+      while (sp > 0) {
+        const p = stack[--sp];
+        queue[tail++] = p;
+        const x = p % w;
+        if (x > 0) push(p - 1);
+        if (x < w - 1) push(p + 1);
+        if (p >= w) push(p - w);
+        if (p < w * (h - 1)) push(p + w);
+      }
+    }
+
+    // 線の画素へ、いちばん近い領域の id を広げる
+    const spread = (q: number, id: number) => {
+      if (barrier[q] && owner[q] < 0) {
+        owner[q] = id;
+        queue[tail++] = q;
+      }
+    };
+    while (head < tail) {
+      const p = queue[head++];
+      // 濃い線の画素に着いたら、そこから先へは広げない（線の芯で止める）
+      if (barrier[p] && alpha[p] >= INK_OPAQUE) continue;
+      const id = owner[p];
+      const x = p % w;
+      if (x > 0) spread(p - 1, id);
+      if (x < w - 1) spread(p + 1, id);
+      if (p >= w) spread(p - w, id);
+      if (p < w * (h - 1)) spread(p + w, id);
+    }
+    return owner;
+  }
+
+  /** 線に囲まれた「塗りが入れないかたまり」を線に含める（線の中の穴つぶし）。
+   *
+   *  塞ぐのは次のどちらか:
+   *    - 面積が PINHOLE_MAX 以下 … 減色でできた点状の穴
+   *    - 幅が 1〜2px しかない     … 線と線のあいだの細い割れ目。長さは問わない
+   *      （皺や毛のような細い線が二重に走っている所にできる。同梱の下絵では最長 131px）
+   *
+   *  幅 3px 以上の場所をひとつでも持つかたまりは残すので、歯・爪・目のような
+   *  「小さいけれどちゃんとした部品」は潰さず、1 つずつ塗り分けられる。
+   *  連結性は flood と同じ 4 近傍でないと「flood が入れないかたまり」と一致しない。 */
+  private sealPinholes(barrier: Uint8Array, w: number, h: number) {
+    // 「幅 3px 以上の場所」= 8 近傍がすべて線でない画素。これを 1 つも持たなければ細い
+    const interior = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        if (barrier[i]) continue;
+        if (
+          !barrier[i - 1] && !barrier[i + 1] && !barrier[i - w] && !barrier[i + w] &&
+          !barrier[i - w - 1] && !barrier[i - w + 1] && !barrier[i + w - 1] && !barrier[i + w + 1]
+        ) {
+          interior[i] = 1;
+        }
+      }
+    }
+
+    const seen = new Uint8Array(w * h);
+    const stack = new Int32Array(w * h);
+    const seeds: number[] = [];
+    let sp = 0;
+    const walk = (q: number) => {
+      if (!barrier[q] && !seen[q]) {
+        seen[q] = 1;
+        stack[sp++] = q;
+      }
+    };
+    // 塞ぐ画素を覚えておくと大きなかたまりで場所を食うので、まずは種だけ選ぶ
+    const fill = (q: number) => {
+      if (!barrier[q]) {
+        barrier[q] = 1;
+        stack[sp++] = q;
+      }
+    };
+
+    for (let start = 0; start < barrier.length; start++) {
+      if (barrier[start] || seen[start]) continue;
+      sp = 0;
+      let n = 0;
+      let thin = true;
+      stack[sp++] = start;
+      seen[start] = 1;
+      while (sp > 0) {
+        const p = stack[--sp];
+        n++;
+        if (interior[p]) thin = false;
+        const x = p % w;
+        if (x > 0) walk(p - 1);
+        if (x < w - 1) walk(p + 1);
+        if (p >= w) walk(p - w);
+        if (p < w * (h - 1)) walk(p + w);
+      }
+      if (thin || n <= PINHOLE_MAX) seeds.push(start);
+    }
+
+    // 塞ぐのは走査を終えてから。barrier に書きながら広がれば、書いた印がそのまま
+    // 「訪問済み」になり、かたまりの外（もとから線の所）へは出ていかない
+    for (const seed of seeds) {
+      sp = 0;
+      barrier[seed] = 1;
+      stack[sp++] = seed;
+      while (sp > 0) {
+        const p = stack[--sp];
+        const x = p % w;
+        if (x > 0) fill(p - 1);
+        if (x < w - 1) fill(p + 1);
+        if (p >= w) fill(p - w);
+        if (p < w * (h - 1)) fill(p + w);
+      }
+    }
   }
   /** はみだしガードの閾値 (px)。0 でガードなし */
   setGuardThreshold(px: number) {
@@ -377,12 +554,7 @@ export class PaintEngine {
     // いまのマスクに入っていた最後の点までが旧領域のセグメント
     let cut = this.points.length - 1;
     while (cut > 0 && !this.insideMask(this.points[cut])) cut--;
-    const s = this.strokeCtx;
-    s.clearRect(0, 0, this.strokeBuf.width, this.strokeBuf.height);
-    this.drawPath(this.points.slice(0, cut + 1));
-    s.globalCompositeOperation = "destination-in";
-    s.drawImage(this.maskCanvas, 0, 0);
-    s.globalCompositeOperation = "source-over";
+    this.renderSegment(this.points.slice(0, cut + 1));
     this.accumCtx.drawImage(this.strokeBuf, 0, 0);
     this.hasAccum = true;
     // 境界の点を共有して新セグメントを始める（線のところで描画がつながる）
@@ -421,43 +593,18 @@ export class PaintEngine {
     return -1;
   }
 
-  /** seed（線でないピクセル）から 4 近傍フラッドフィルで mask / maskData を広げる。
-   *  線ピクセルも深さ LINE_OVERLAP まで許可に含める（線の下まで塗って白い隙間を防ぐ）が、
-   *  線を突き抜けた先の領域へは広がらない。 */
+  /** seed と同じ持ち主の画素をすべて mask / maskData に入れる。
+   *  owner は「線でない画素＝その領域」「線の画素＝いちばん近い領域」なので、
+   *  これだけで「領域＋その領域が持つぶんの線」がちょうど選ばれる（buildOwner を参照）。 */
   private flood(seed: number) {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    const barrier = this.barrier!;
+    const owner = this.owner!;
     const mask = this.mask!;
     const alpha = this.maskData!.data;
-    if (!this.floodQueue) this.floodQueue = new Int32Array(w * h);
-    const queue = this.floodQueue;
-    let head = 0;
-    let tail = 0;
-    // queue の各要素は idx + depth * 0x100000（idx < 2^20, depth <= LINE_OVERLAP）
-    const push = (idx: number, depth: number) => {
-      mask[idx] = 1;
-      alpha[idx * 4 + 3] = 255;
-      queue[tail++] = idx + depth * 0x100000;
-    };
-    const step = (idx: number, depth: number) => {
-      if (mask[idx]) return;
-      if (barrier[idx]) {
-        if (depth + 1 <= LINE_OVERLAP) push(idx, depth + 1);
-      } else if (depth === 0) {
-        push(idx, 0); // 線の中から線でないピクセルへは戻らない（隣の領域に漏れない）
-      }
-    };
-    push(seed, 0);
-    while (head < tail) {
-      const v = queue[head++];
-      const idx = v & 0xfffff;
-      const depth = v >>> 20;
-      const x = idx % w;
-      if (x > 0) step(idx - 1, depth);
-      if (x < w - 1) step(idx + 1, depth);
-      if (idx >= w) step(idx - w, depth);
-      if (idx < w * (h - 1)) step(idx + w, depth);
+    const id = owner[seed];
+    for (let i = 0; i < owner.length; i++) {
+      if (owner[i] !== id) continue;
+      mask[i] = 1;
+      alpha[i * 4 + 3] = 255;
     }
   }
 
@@ -494,19 +641,24 @@ export class PaintEngine {
     s.stroke();
   }
 
-  /** points をストロークバッファに描き、preStroke + モード合成で本 canvas に反映 */
-  private renderStroke() {
+  /** pts をストロークバッファに描き、ガード中は許可領域で切る */
+  private renderSegment(pts: { x: number; y: number }[]) {
     const s = this.strokeCtx;
     s.clearRect(0, 0, this.strokeBuf.width, this.strokeBuf.height);
-    this.drawPath(this.points);
-
-    // はみだしガード: いまのセグメントを許可領域でクリップし、確定済みセグメントを重ねる。
-    // どちらも不透明の同色なので、重なっても後段のモード合成で継ぎ目は出ない
+    this.drawPath(pts);
     if (this.mask && this.mode !== "erase") {
       s.globalCompositeOperation = "destination-in";
       s.drawImage(this.maskCanvas, 0, 0);
       s.globalCompositeOperation = "source-over";
     }
+  }
+
+  /** points をストロークバッファに描き、preStroke + モード合成で本 canvas に反映 */
+  private renderStroke() {
+    // はみだしガード: いまのセグメントを許可領域でクリップし、確定済みセグメントを重ねる。
+    // どちらも不透明の同色なので、重なっても後段のモード合成で継ぎ目は出ない
+    const s = this.strokeCtx;
+    this.renderSegment(this.points);
     if (this.hasAccum) s.drawImage(this.strokeAccum, 0, 0);
 
     const ctx = this.ctx;
