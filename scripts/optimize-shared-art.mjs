@@ -36,7 +36,7 @@ const beforeSize = fs.statSync(input).size;
 
 const { data, baked } = await toLineartRaw(input);
 const buffer = await sharp(data, { raw: { width: CANVAS_W, height: CANVAS_H, channels: 4 } })
-  .png({ palette: true, colors: 64, compressionLevel: 9, effort: 10 })
+  .png({ palette: true, colors: 64, compressionLevel: 9, effort: 10, dither: 0 })
   .toBuffer();
 
 fs.mkdirSync(path.dirname(output), { recursive: true });

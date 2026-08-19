@@ -1,7 +1,7 @@
 // 下絵メーカー: アップロード画像の下絵化（1024x768 化・白背景の透明化・線を黒に統一）と、
 // 外部画像生成AI用の英語プロンプト生成、クリップボードコピーのユーティリティ。
 import { CANVAS_W, CANVAS_H } from "./lineart";
-import { writeLinePixel, levelFromAlpha, type Level } from "./level-core";
+import { writeLinePixel, despeckleAlpha, levelFromAlpha, type Level } from "./level-core";
 
 /**
  * File を Image 要素に読み込む。
@@ -61,6 +61,11 @@ function toTransparent(img: HTMLImageElement): { imageUrl: string; alpha: Uint8A
   const alpha = new Uint8Array(CANVAS_W * CANVAS_H);
   for (let i = 0, p = 0; i < px.length; i += 4, p++) {
     alpha[p] = writeLinePixel(px, i);
+  }
+  // 減色や元画像のざらつきで線の中に残る小さいノイズの穴を埋める
+  despeckleAlpha(alpha, CANVAS_W, CANVAS_H);
+  for (let i = 0, p = 0; i < px.length; i += 4, p++) {
+    px[i + 3] = alpha[p];
   }
   ctx.putImageData(data, 0, 0);
   return { imageUrl: canvas.toDataURL("image/png"), alpha };
