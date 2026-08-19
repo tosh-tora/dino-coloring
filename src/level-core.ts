@@ -91,6 +91,65 @@ export function writeLinePixel(px: { [i: number]: number }, i: number): number {
   return a;
 }
 
+/** ノイズの穴とみなす面積の上限。paint.ts の PINHOLE_MAX(=12) と同じ考え方の値
+ *  （小さい穴＝ノイズという判断基準を合わせている）。 */
+const DESPECKLE_MAX_AREA = 12;
+
+/**
+ * 線の中に孤立して残る、面積の小さい「ノイズの穴」を塗りつぶす。
+ *
+ * 減色や元画像のざらつきで、線の内部に完全透明の画素が点々と残ることがある
+ * (paint.ts の sealPinholes 参照)。あちらは塗りの境界計算だけに効く実行時の
+ * 対症療法なので、下絵そのものの見た目には穴が残ったまま。ここでは焼き込み時
+ * (下絵の生成・アップロード時) に直接埋めることで、見た目も塗り判定も直す。
+ *
+ * sealPinholes にはもう1つ「幅1〜2pxの細い割れ目」を塞ぐ判定もあるが、それは
+ * 下絵ごとに正当な形状のことがある(archaeopteryx の羽根の間の割れ目など)ため、
+ * ここでは扱わない。一括で焼き込むと、下絵ごとの見た目チェックなしに線の形が
+ * 変わってしまう。
+ *
+ * alpha を直接書き換える(新しい配列は作らない)。
+ */
+export function despeckleAlpha(alpha: Uint8Array, w: number, h: number): void {
+  const total = w * h;
+  const seen = new Uint8Array(total);
+  const stack = new Int32Array(total);
+  const members = new Int32Array(total);
+  for (let start = 0; start < total; start++) {
+    if (alpha[start] >= INK_ALPHA || seen[start]) continue;
+    let sp = 0;
+    let mc = 0;
+    stack[sp++] = start;
+    seen[start] = 1;
+    let touchesEdge = false;
+    while (sp > 0) {
+      const p = stack[--sp];
+      members[mc++] = p;
+      const x = p % w;
+      const y = (p / w) | 0;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchesEdge = true;
+      if (x > 0 && alpha[p - 1] < INK_ALPHA && !seen[p - 1]) {
+        seen[p - 1] = 1;
+        stack[sp++] = p - 1;
+      }
+      if (x < w - 1 && alpha[p + 1] < INK_ALPHA && !seen[p + 1]) {
+        seen[p + 1] = 1;
+        stack[sp++] = p + 1;
+      }
+      if (y > 0 && alpha[p - w] < INK_ALPHA && !seen[p - w]) {
+        seen[p - w] = 1;
+        stack[sp++] = p - w;
+      }
+      if (y < h - 1 && alpha[p + w] < INK_ALPHA && !seen[p + w]) {
+        seen[p + w] = 1;
+        stack[sp++] = p + w;
+      }
+    }
+    if (touchesEdge || mc > DESPECKLE_MAX_AREA) continue;
+    for (let i = 0; i < mc; i++) alpha[members[i]] = 255;
+  }
+}
+
 /**
  * 等倍のアルファを面積平均で ANALYZE_W x ANALYZE_H に縮小する。
  *
