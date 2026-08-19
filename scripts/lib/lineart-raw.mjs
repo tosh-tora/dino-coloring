@@ -8,7 +8,7 @@
 //
 // TypeScript を直接 import するので Node 22.6 以上が必要（型注釈の除去）。
 import sharp from "sharp";
-import { writeLinePixel } from "../../src/level-core.ts";
+import { writeLinePixel, despeckleAlpha } from "../../src/level-core.ts";
 
 // src/lineart.ts の CANVAS_W/CANVAS_H と同じ値。この定数を変えたらここも合わせること
 export const CANVAS_W = 1024;
@@ -75,6 +75,13 @@ export async function toLineartRaw(input) {
     } else {
       alpha[p] = writeLinePixel(data, i);
     }
+  }
+
+  // 減色や元画像のざらつきで線の中に残る小さいノイズの穴を埋める（既に焼き込み済みの
+  // 画像に対しても冪等なので baked かどうかによらず毎回かける）
+  despeckleAlpha(alpha, CANVAS_W, CANVAS_H);
+  for (let i = 0, p = 0; p < alpha.length; i += 4, p++) {
+    data[i + 3] = alpha[p];
   }
 
   return { data, alpha, baked, width: CANVAS_W, height: CANVAS_H };
