@@ -314,6 +314,20 @@
       "category": "cat-dino",
       "file": "shared-allosaurus-vs-stegosaurus.png",
       "level": 3
+    },
+    {
+      "id": "shared-sauropelta",
+      "name": "サウロペルタ",
+      "category": "cat-dino",
+      "file": "shared-sauropelta.png",
+      "level": 2
+    },
+    {
+      "id": "shared-amplosaurus",
+      "name": "アンペロサウルス",
+      "category": "cat-dino",
+      "file": "shared-amplosaurus.png",
+      "level": 1
     }
   ]
 }
